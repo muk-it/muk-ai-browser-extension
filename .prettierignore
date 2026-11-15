@@ -1,0 +1,18 @@
+# prettier does not read .gitignore, so mirror the generated/vendored paths here.
+
+node_modules/
+package-lock.json
+
+# WXT build artifacts + generated types
+.output/
+.wxt/
+
+# Playwright artifacts
+playwright-report/
+test-results/
+
+# Vendored third-party (Apache-2.0) code keeps upstream formatting
+lib/playwright-aria/
+
+.keys/
+video_pipeline/

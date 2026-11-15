@@ -1,93 +1,109 @@
-# muk-ai-browser-extension
+# MuK AI Browser
 
+<img src="public/icon/128.png" alt="" width="64" align="right">
 
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-MuK_AI_Browser-33627E?style=flat-square&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
+[![Odoo app](https://img.shields.io/badge/Odoo-muk__ai__browser-714B67?style=flat-square)](https://apps.odoo.com/apps/modules/muk_ai_browser)
+[![YouTube demo](https://img.shields.io/badge/YouTube-demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/ZcIvjovoFtg)
+[![License Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
+[![Website mukit.at](https://img.shields.io/badge/Website-mukit.at-243742?style=flat-square)](https://www.mukit.at)
 
-## Getting started
+A Chrome extension that lets a MuK AI agent from your Odoo read and act on the
+web pages you work on: read a page, find elements, click, type, fill forms,
+navigate, open tabs and take screenshots. Chrome's side panel shows your
+Odoo's own MuK AI chat; the agent, its approvals, the per-site rules and the
+audit trail live in your Odoo.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+It requires the **MuK AI Browser** Odoo app (`muk_ai_browser`), free under
+LGPL-3. Built with [WXT](https://wxt.dev), TypeScript and React. Licensed
+under Apache-2.0 (see `LICENSE`); the accessibility-tree code is adapted from
+Microsoft Playwright (see `NOTICE` and `lib/playwright-aria/`).
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Install and set up
 
-## Add your files
+1. Install the `muk_ai_browser` app in your Odoo.
+2. Add the extension from the
+   [Chrome Web Store](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne),
+   or build it yourself: `npm install`, `npm run build`, then in
+   `chrome://extensions` enable Developer mode, click **Load unpacked** and
+   choose `.output/chrome-mv3`. A self-built extension carries a fixed public
+   key, so its id is always `ogglimafigjflmiccojhjlljohnoabph`.
+3. The options page opens and walks through three steps:
+    1. **Odoo address**: `https://...` (`http://` only for `localhost`),
+       resolving to one database. Saving asks Chrome for access to that site.
+    2. **Connect**: opens `<odoo>/muk_ai_browser/connect`. Log in there; the
+       extension reads the one-time code, pairs, and the tab closes by
+       itself while the side panel continues. Elsewhere, paste the code into
+       the side panel.
+    3. **Allow on all sites** (optional): lets the agent act on any page and
+       shows the MuK AI tab on pages (can be turned off).
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Using it
 
+Open the side panel with the toolbar button, or with the MuK AI tab on the
+right edge of a page (drag it up or down; it hides while the panel is open
+and never shows on your Odoo). The panel shows the MuK AI chat of your Odoo,
+with everything installed there: agents, tools, approvals, skills and voice.
+Before loading it the extension asks Odoo whether you are logged in, and
+shows **Log in to Odoo** or **Odoo is not reachable** until it is ready.
+
+The chat open in the panel is the one the agent acts for. While it is not
+working, the agent follows the tab you look at; the bar above the chat names
+that site (with a pulsing dot while the agent works), and clicking it brings
+the tab to the front. Tabs the agent opens join a tab group named "MuK AI".
+
+## Permissions
+
+| Permission                          | Why                                                                                            |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `sidePanel`                         | The Odoo chat is shown in Chrome's side panel.                                                 |
+| `storage`                           | The Odoo address, the device key, the chat id and the launcher preferences.                    |
+| `scripting`                         | Injects the page tools when the agent acts; registers the pairing reader and the launcher.     |
+| `activeTab`                         | Lets the agent act on the tab where you clicked the toolbar button, without all-site access.   |
+| `tabs`, `tabGroups`                 | Finds the agent's tab, opens and closes its own tabs and groups them as "MuK AI".              |
+| `alarms`                            | Resumes polling Odoo after Chrome suspends the extension, only while a chat is active.         |
+| Your Odoo's address (asked on save) | Talks to your Odoo, checks the login and reads the pairing code on its connect page.           |
+| All sites (optional)                | Lets the agent read and act on any page, and shows the MuK AI tab. Otherwise only `activeTab`. |
+
+**Trusted input** (real input events through the debugger protocol) needs the
+`debugger` permission, which Chrome does not allow as optional. This build
+does not request it and answers `trusted: true` calls with
+`trusted_input_unavailable`; add `debugger` to `permissions` in
+`wxt.config.ts` to enable it.
+
+## Privacy
+
+The extension talks only to the Odoo you configured. It sends the chat id, the
+origin of the agent's tab, the device label (e.g. `Chrome on Windows`) and the
+results of the actions the agent asks for (page outline, screenshots, URL and
+title). It reads pages only when the agent asks, only in the agent's tab, never
+types into password, payment-card or one-time-code fields and never uploads
+files. Your Odoo decides per site whether the agent may act, must ask, or is
+blocked.
+
+## Develop
+
+```bash
+npm run build          # .output/chrome-mv3
+npm run zip:store      # Chrome Web Store package, without the id key (store/LISTING.md)
+npm run dev            # watch build with reload
+npm test               # unit tests (vitest, jsdom)
+npm run lint           # eslint
+npm run format:check   # prettier
+npx tsc --noEmit       # types
+npm run e2e            # Playwright against the build and a fake Odoo
 ```
-cd existing_repo
-git remote add origin https://gitlab.mukit.at/development/muk-ai-browser-extension.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+`e2e/live.spec.ts` runs against a real Odoo when `ODOO_URL` and `PAIR_CODE`
+are set.
 
-- [ ] [Set up project integrations](https://gitlab.mukit.at/development/muk-ai-browser-extension/-/settings/integrations)
+- `lib/`: logic with unit tests: Odoo client, attach and poll, tool routing
+  and runner, perception, page actions, screenshots, trusted input, messages.
+- `entrypoints/`: wiring. `background.ts` (service worker: pairing, login
+  check, polling, launcher visibility), `sidepanel/` (onboarding and the
+  embedded chat), `options/`, `content/` (page tools, injected on demand),
+  `launcher.content.ts` and `pairing.content.ts` (registered at runtime).
+- `store/`: Chrome Web Store listing, privacy policy and images.
 
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+The Odoo side of the protocol (pairing, polling, tool results) lives in the
+`muk_ai_browser` app, in `controllers/browser.py`.

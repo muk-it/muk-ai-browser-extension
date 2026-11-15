@@ -1,0 +1,307 @@
+:root {
+    color-scheme: light dark;
+    --mk-brand: #33627e;
+    --mk-ok: #2b8a3e;
+    --mk-surface: #ffffff;
+    --mk-surface-2: #f9fafb;
+    --mk-text: #1f2937;
+    --mk-muted: #6b7280;
+    --mk-border: #e5e7eb;
+    --mk-err: #d93025;
+    font-family:
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --mk-surface: #17222a;
+        --mk-surface-2: #1f2d36;
+        --mk-text: #e7edf1;
+        --mk-muted: #9fb0ba;
+        --mk-border: #2c3b45;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--mk-surface);
+}
+
+.mk-icon {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.mk-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    font-size: 13px;
+    line-height: 1.5;
+    background: var(--mk-surface);
+    color: var(--mk-text);
+}
+
+/* ---------------------------------------------------------- Agent bar */
+
+.mk-agentbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    flex: none;
+    padding: 0 10px;
+    border: none;
+    border-bottom: 1px solid var(--mk-border);
+    background: var(--mk-surface-2);
+    color: var(--mk-muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mk-agentbar:hover:not(:disabled) {
+    color: var(--mk-text);
+}
+
+.mk-agentbar:disabled {
+    cursor: default;
+}
+
+.mk-agentbar:focus-visible {
+    outline: 2px solid var(--mk-brand);
+    outline-offset: -2px;
+}
+
+.mk-agentbar img,
+.mk-agentbar .mk-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
+.mk-agentbar__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mk-agentbar__error {
+    color: var(--mk-err);
+}
+
+.mk-agentbar__text b {
+    color: var(--mk-text);
+    font-weight: 600;
+}
+
+.mk-agentbar__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mk-ok);
+    animation: mk-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mk-pulse {
+    50% {
+        opacity: 0.3;
+        transform: scale(0.75);
+    }
+}
+
+/* ---------------------------------------------------------- Odoo frame */
+
+.mk-stage {
+    position: relative;
+    flex: 1;
+    display: flex;
+}
+
+.mk-frame {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
+.mk-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    background: var(--mk-surface);
+}
+
+.mk-loading {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--mk-muted);
+}
+
+.mk-loading > .mk-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--mk-brand);
+    animation: mk-breathe 2s ease-in-out infinite;
+}
+
+.mk-loading p {
+    margin: 0;
+}
+
+@keyframes mk-breathe {
+    50% {
+        opacity: 0.45;
+    }
+}
+
+.mk-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--mk-brand);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mk-agentbar__dot,
+    .mk-loading > .mk-icon {
+        animation: none;
+    }
+}
+
+/* ---------------------------------------------------------- Buttons */
+
+.mk-btn {
+    padding: 7px 13px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mk-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.mk-btn--primary {
+    background: var(--mk-brand);
+    color: #fff;
+}
+
+.mk-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+}
+
+.mk-btn--ghost {
+    background: transparent;
+    border-color: var(--mk-border);
+    color: var(--mk-text);
+}
+
+.mk-btn--ghost:hover:not(:disabled) {
+    background: var(--mk-surface-2);
+}
+
+/* ---------------------------------------------------------- Onboarding */
+
+.mk-cta {
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    padding: 24px 20px;
+    color: var(--mk-muted);
+}
+
+.mk-cta > .mk-icon {
+    width: 34px;
+    height: 34px;
+    color: var(--mk-brand);
+}
+
+.mk-cta__title {
+    margin: 6px 0 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mk-text);
+}
+
+.mk-cta__sub {
+    margin: 0;
+    max-width: 280px;
+}
+
+.mk-cta__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.mk-cta__wait {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 0;
+    color: var(--mk-text);
+}
+
+.mk-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--mk-border);
+    border-top-color: var(--mk-brand);
+    border-radius: 50%;
+    animation: mk-spin 0.8s linear infinite;
+}
+
+@keyframes mk-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.mk-pair {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.mk-pair input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--mk-border);
+    border-radius: 8px;
+    background: var(--mk-surface);
+    color: inherit;
+}
+
+.mk-error {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--mk-err);
+}

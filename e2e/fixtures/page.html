@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>MuK AI Browser Fixture</title>
+        <style>
+            body {
+                font-family: system-ui, sans-serif;
+                padding: 48px;
+                color: #243742;
+            }
+            h1 {
+                margin: 0 0 8px;
+            }
+            .hint {
+                color: #888;
+                margin: 0 0 24px;
+            }
+            button {
+                font-size: 18px;
+                padding: 12px 28px;
+                cursor: pointer;
+                border: 1px solid #5d8da8;
+                border-radius: 6px;
+                background: #eef4f8;
+            }
+            label {
+                display: block;
+                margin: 20px 0;
+            }
+            #output p {
+                font-size: 30px;
+                color: #2e7d32;
+                font-weight: 700;
+                margin: 24px 0 0;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>MuK AI Browser fixture</h1>
+        <p class="hint">The e2e suite reads this page and clicks the button.</p>
+        <button id="run">Run Action</button>
+        <label>Name <input id="name" type="text" /></label>
+        <label>Password <input id="pw" type="password" /></label>
+        <div id="output"></div>
+        <script>
+            document.getElementById('run').addEventListener('click', () => {
+                const out = document.getElementById('output');
+                const node = document.createElement('p');
+                node.textContent = 'ACTION_DONE';
+                out.appendChild(node);
+            });
+        </script>
+    </body>
+</html>

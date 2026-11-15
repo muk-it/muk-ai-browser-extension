@@ -1,0 +1,275 @@
+:root {
+    color-scheme: light dark;
+    --mk-fg: #1f2d35;
+    --mk-muted: #5f6f78;
+    --mk-bg: #f6f8f9;
+    --mk-card: #ffffff;
+    --mk-line: #dde3e7;
+    --mk-accent: #33627e;
+    --mk-on-accent: #ffffff;
+    --mk-ok: #2b8a3e;
+    --mk-error: #c92a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --mk-fg: #e6ecef;
+        --mk-muted: #9fb0b9;
+        --mk-bg: #151c20;
+        --mk-card: #1e272c;
+        --mk-line: #33414a;
+        --mk-accent: #6fb1cf;
+        --mk-on-accent: #13181c;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--mk-bg);
+    color: var(--mk-fg);
+    font:
+        14px/1.5 system-ui,
+        sans-serif;
+}
+
+.mk-options {
+    max-width: 680px;
+    margin: 48px auto;
+    padding: 0 16px;
+}
+
+.mk-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.mk-header__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.mk-header__text {
+    flex: 1;
+    min-width: 200px;
+}
+
+.mk-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.mk-header__text p {
+    margin: 2px 0 0;
+    color: var(--mk-muted);
+}
+
+.mk-state {
+    margin: 0;
+    padding: 4px 12px;
+    border: 1px solid var(--mk-line);
+    border-radius: 999px;
+    background: var(--mk-card);
+    color: var(--mk-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.mk-state::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--mk-line);
+}
+
+.mk-state--ok {
+    border-color: var(--mk-ok);
+    color: var(--mk-ok);
+}
+
+.mk-state--ok::before {
+    background: var(--mk-ok);
+}
+
+.mk-step {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 12px;
+    padding: 18px 20px;
+    border: 1px solid var(--mk-line);
+    border-radius: 12px;
+    background: var(--mk-card);
+}
+
+.mk-step--current {
+    border-color: var(--mk-accent);
+    box-shadow: 0 0 0 1px var(--mk-accent);
+}
+
+.mk-step__badge {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--mk-line);
+    color: var(--mk-fg);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.mk-step--current .mk-step__badge {
+    background: var(--mk-accent);
+    color: var(--mk-on-accent);
+}
+
+.mk-step__badge--done {
+    background: var(--mk-ok);
+    color: #fff;
+}
+
+.mk-step__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.mk-step h2 {
+    margin: 2px 0 6px;
+    font-size: 15px;
+}
+
+.mk-step p {
+    margin: 0 0 10px;
+    color: var(--mk-muted);
+}
+
+.mk-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.mk-row input {
+    flex: 1;
+    min-width: 200px;
+    padding: 7px 10px;
+    border: 1px solid var(--mk-line);
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+
+.mk-switch {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--mk-line);
+    cursor: pointer;
+}
+
+.mk-switch__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mk-switch__text strong {
+    font-weight: 600;
+}
+
+.mk-switch__text small {
+    color: var(--mk-muted);
+    font-size: 13px;
+}
+
+.mk-switch input {
+    position: relative;
+    flex: none;
+    width: 38px;
+    height: 22px;
+    margin: 0;
+    border-radius: 11px;
+    background: var(--mk-line);
+    cursor: pointer;
+    transition: background 120ms ease;
+    appearance: none;
+}
+
+.mk-switch input::after {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px #13181c40;
+    content: '';
+    transition: transform 120ms ease;
+}
+
+.mk-switch input:checked {
+    background: var(--mk-accent);
+}
+
+.mk-switch input:checked::after {
+    transform: translateX(16px);
+}
+
+.mk-switch input:focus-visible {
+    outline: 2px solid var(--mk-accent);
+    outline-offset: 2px;
+}
+
+.mk-switch:has(input:disabled) {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.mk-switch input:disabled {
+    cursor: default;
+}
+
+button {
+    padding: 7px 14px;
+    border: 1px solid var(--mk-accent);
+    border-radius: 7px;
+    background: var(--mk-accent);
+    color: var(--mk-on-accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+button.mk-secondary {
+    background: transparent;
+    color: var(--mk-accent);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--mk-accent);
+    outline-offset: 2px;
+}
+
+.mk-message {
+    color: var(--mk-error);
+}

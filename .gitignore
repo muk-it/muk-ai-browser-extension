@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# WXT build output + generated types
+.output/
+.wxt/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Misc
+*.log
+.DS_Store
+
+# Signing key of the extension id (never commit)
+.keys/
+
+# Demo video pipeline media (kept locally, not part of the extension)
+video_pipeline/
