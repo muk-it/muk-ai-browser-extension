@@ -65,6 +65,8 @@ describe('URLs', () => {
         ['mycompany.odoo.com', 'https://mycompany.odoo.com'],
         ['https://odoo.example/odoo/action-1', 'https://odoo.example'],
         ['http://localhost:8069/web', 'http://localhost:8069'],
+        ['localhost:8069', 'http://localhost:8069'],
+        ['https://localhost:8069', 'https://localhost:8069'],
         ['http://odoo.example', null],
         ['ftp://odoo.example', null],
         ['', null],

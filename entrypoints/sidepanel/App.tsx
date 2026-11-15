@@ -55,7 +55,8 @@ export function App() {
  * first, and again when a loaded frame stays silent: logged out shows a login
  * card, unreachable a notice; both keep checking and open the chat as soon as
  * Odoo answers with a user. Otherwise the frame loads behind a loading state
- * until it reports the chat it opens, which this device then attaches to.
+ * until it reports the chat it opens, which this device then attaches to: a
+ * new chat when the panel opens, the attached one when the frame reloads.
  * While the chat shows, the worker's polling watches Odoo: unreachable covers
  * the frame, and the frame reloads once Odoo answers again.
  *
@@ -71,8 +72,9 @@ function OdooChat({
     odooUrl: string;
     client: PanelClient;
 }) {
-    const chatUrl = () => `${odooUrl}/odoo/ai-chat/${status.chatId ?? ''}`;
-    const [src, setSrc] = useState(chatUrl);
+    const chatUrl = () =>
+        `${odooUrl}/ai_browser/chat${status.chatId ? `/${status.chatId}` : ''}`;
+    const [src, setSrc] = useState(`${odooUrl}/ai_browser/chat`);
     const [attempt, setAttempt] = useState(0);
     const [loads, setLoads] = useState(0);
     const [access, setAccess] = useState<Access>('unknown');

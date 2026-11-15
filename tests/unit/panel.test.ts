@@ -140,10 +140,10 @@ describe('side panel', () => {
         expect(container.querySelector('iframe')).not.toBeNull();
     });
 
-    it('embeds the stored chat with the agent bar above it', async () => {
+    it('opens a new chat with the agent bar above it', async () => {
         await open(true);
         expect(container.querySelector('iframe')?.getAttribute('src')).toBe(
-            `${ODOO}/odoo/ai-chat/7`,
+            `${ODOO}/ai_browser/chat`,
         );
         expect(container.querySelector('iframe')?.hasAttribute('sandbox')).toBe(false);
         expect(container.querySelector('.mk-agentbar')?.textContent).toBe(
@@ -207,7 +207,7 @@ describe('side panel', () => {
             await act(() => vi.advanceTimersByTimeAsync(waits[1]));
             expect(container.textContent).not.toContain(notice);
             expect(container.querySelector('iframe')?.getAttribute('src')).toBe(
-                `${ODOO}/odoo/ai-chat/7`,
+                `${ODOO}/ai_browser/chat`,
             );
         },
     );
@@ -228,7 +228,7 @@ describe('side panel', () => {
         expect(container.textContent).toContain('Opening your chat...');
         expect(container.querySelector('iframe')).not.toBe(first);
         expect(container.querySelector('iframe')?.getAttribute('src')).toBe(
-            `${ODOO}/odoo/ai-chat/7`,
+            `${ODOO}/ai_browser/chat/7`,
         );
     });
 

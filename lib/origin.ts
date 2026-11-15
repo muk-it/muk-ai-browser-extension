@@ -12,7 +12,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 /**
  * Normalise the Odoo URL from the options page to its origin. `https:` is
  * accepted for any host, `http:` only for a local host, so the device key never
- * travels in clear text over a network.
+ * travels in clear text over a network. Without a scheme a local host gets
+ * `http:` and any other host `https:`.
  *
  * @param input - What the user typed (with or without a path or scheme).
  * @returns The origin, or `null` when the URL is unusable.
@@ -22,11 +23,15 @@ export function normalizeOdooUrl(input: string): string | null {
     if (!raw) {
         return null;
     }
+    const scheme = /^[a-z]+:\/\//i.test(raw);
     let url: URL;
     try {
-        url = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`);
+        url = new URL(scheme ? raw : `https://${raw}`);
     } catch {
         return null;
+    }
+    if (!scheme && LOCAL_HOSTS.has(url.hostname)) {
+        url.protocol = 'http:';
     }
     if (url.protocol === 'https:') {
         return url.origin;

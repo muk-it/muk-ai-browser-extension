@@ -130,20 +130,16 @@ test('pairs, embeds the Odoo chat, attaches to it and runs its actions', async (
         await expect(panel.getByText('Connect to your Odoo')).toBeVisible();
 
         const connect = await context.newPage();
+        const closed = connect.waitForEvent('close');
         await connect.goto(`${odoo.served.origin}/muk_ai_browser/connect`);
         await expect(connect.getByRole('status')).toContainText(
             'This browser is connected to Odoo',
         );
         await expect(connect.locator('pre.mk_browser_code')).toHaveCount(0);
         await expect(
-            options.getByText(
-                `Connected as Mitchell Admin to ${new URL(odoo.served.origin).host}`,
-            ),
+            options.getByText(`Mitchell Admin on ${new URL(odoo.served.origin).host}`),
         ).toBeVisible();
-        await Promise.all([
-            connect.waitForEvent('close'),
-            connect.getByRole('button', { name: 'Close this tab' }).click(),
-        ]);
+        await closed;
 
         await expect(
             panel.getByRole('button', { name: 'Log in to Odoo' }),
@@ -152,7 +148,7 @@ test('pairs, embeds the Odoo chat, attaches to it and runs its actions', async (
         odoo.loggedIn = true;
         await expect(panel.locator('iframe.mk-frame')).toHaveAttribute(
             'src',
-            `${odoo.served.origin}/odoo/ai-chat/`,
+            `${odoo.served.origin}/ai_browser/chat`,
         );
         await expect(
             panel.frameLocator('iframe.mk-frame').getByText('Fake muk_ai chat'),
@@ -167,10 +163,6 @@ test('pairs, embeds the Odoo chat, attaches to it and runs its actions', async (
             'Acting in localhost',
         );
         await expect(page.locator('#muk-ai-launcher')).toHaveCount(1);
-        const chat = await context.newPage();
-        await chat.goto(`${odoo.served.origin}/odoo/ai-chat`);
-        await expect(chat.getByText('Fake muk_ai chat')).toBeVisible();
-        await expect(chat.locator('#muk-ai-launcher')).toHaveCount(0);
         expect(odoo.results.c1).toMatchObject({
             browser_session_id: 'bs-5',
             origin: site.origin,
@@ -182,6 +174,10 @@ test('pairs, embeds the Odoo chat, attaches to it and runs its actions', async (
                 origin: site.origin,
                 result: { ok: true },
             });
+        const chat = await context.newPage();
+        await chat.goto(`${odoo.served.origin}/ai_browser/chat`);
+        await expect(chat.getByText('Fake muk_ai chat')).toBeVisible();
+        await expect(chat.locator('#muk-ai-launcher')).toHaveCount(0);
         await expect(panel.getByRole('button', { name: 'Log in to Odoo' })).toHaveCount(
             0,
         );
@@ -255,7 +251,7 @@ async function fakeOdoo(extensionId: string): Promise<FakeOdoo> {
             );
             return;
         }
-        if (url.pathname.startsWith('/odoo/ai-chat')) {
+        if (url.pathname.startsWith('/ai_browser/chat')) {
             fake.chatLoads += 1;
             res.writeHead(200, {
                 'Content-Type': 'text/html',
