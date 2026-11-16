@@ -50,7 +50,8 @@ function grantedCopy(): string {
 }
 
 /**
- * Launch Chromium (new headless) with the granted extension copy.
+ * Launch Chromium with the granted extension copy, headless unless `HEADED`
+ * is set.
  *
  * @returns The context, the service worker and a cleanup function.
  */
@@ -60,7 +61,7 @@ export async function launch(): Promise<Launched> {
     const context = await chromium.launchPersistentContext(profile, {
         headless: false,
         args: [
-            '--headless=new',
+            ...(process.env.HEADED ? [] : ['--headless=new']),
             `--disable-extensions-except=${extension}`,
             `--load-extension=${extension}`,
         ],

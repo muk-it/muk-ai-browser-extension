@@ -17,11 +17,15 @@ When you use it, the extension sends to your Odoo:
 - when the assistant acts, the content it asks for: the text and outline of
   the page, the results of clicks and form entries, and screenshots of that
   tab;
+- files the assistant saves from a site to an Odoo record: the extension
+  downloads them with your browser's access to that site and sends them only
+  to your Odoo;
 - a label for the device, such as "Chrome on Windows".
 
 The extension reads a page only when the assistant asks for it, and only in
-the tab the assistant works in. It never types into password, payment-card or
-one-time-code fields and never uploads files.
+the tabs the assistant works in. It never types into password, payment-card or
+one-time-code fields. It downloads an Odoo attachment and puts it into a
+site's file field only after you approved that upload in Odoo.
 
 ## Where the data goes
 
@@ -42,4 +46,4 @@ it.
 
 MuK IT GmbH, Austria. https://www.mukit.at, sale@mukit.at
 
-Last updated: 14 November 2026.
+Last updated: 16 November 2026.

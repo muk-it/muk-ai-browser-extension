@@ -1,3 +1,5 @@
+import type { PageCard } from './odoo';
+
 /**
  * Typed messages between the side panel, the options page, the content
  * scripts and the service worker. Every message is keyed on `type`.
@@ -33,6 +35,8 @@ export interface Status {
     working: boolean;
     /** The chat this device is attached to, reopened in the embedded Odoo. */
     chatId: number | null;
+    /** The company in Odoo behind the site of the agent's tab. */
+    card: PageCard | null;
 }
 
 /** Side panel to service worker, over the panel's port. */
@@ -50,8 +54,12 @@ export type PanelToSwMessage =
     /** Show an Odoo page the embedded chat opened in the agent's tab group. */
     | { type: 'panel/show'; path: string };
 
-/** Service worker to side panel, over the panel's port: the status changed. */
-export type SwToPanelMessage = { type: 'sw/status'; status: Status };
+/** Service worker to side panel, over the panel's port. */
+export type SwToPanelMessage =
+    /** The status changed. */
+    | { type: 'sw/status'; status: Status }
+    /** Text from the context menu to put into the chat's composer. */
+    | { type: 'sw/compose'; text: string };
 
 /** One-off runtime messages. */
 export type RuntimeMessage =

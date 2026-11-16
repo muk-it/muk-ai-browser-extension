@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Checkpoint, DEFAULT_CHECKPOINT } from '../../lib/checkpoint';
-import type { RuntimeMessage, Status } from '../../lib/messaging';
+import type {
+    PanelToSwMessage,
+    RuntimeMessage,
+    Status,
+    SwToPanelMessage,
+} from '../../lib/messaging';
 
 const store = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 
@@ -20,6 +25,8 @@ const fake = vi.hoisted(() => {
     const events = {
         onMessage: event(),
         onConnect: event(),
+        onInstalled: event(),
+        onMenuClicked: event(),
     };
     const tabs = new Map<number, Partial<chrome.tabs.Tab>>();
     return {
@@ -35,6 +42,9 @@ const fake = vi.hoisted(() => {
         ),
         remove: vi.fn(async (id: number) => tabs.delete(id)),
         openOptionsPage: vi.fn(),
+        openPanel: vi.fn(async () => undefined),
+        removeMenus: vi.fn(async () => undefined),
+        createMenu: vi.fn(),
     };
 });
 
@@ -50,7 +60,15 @@ vi.mock('wxt/browser', () => {
     const idle = () => ({ addListener: () => undefined });
     return {
         browser: {
-            sidePanel: { setPanelBehavior: async () => undefined },
+            sidePanel: {
+                setPanelBehavior: async () => undefined,
+                open: fake.openPanel,
+            },
+            contextMenus: {
+                removeAll: fake.removeMenus,
+                create: fake.createMenu,
+                onClicked: fake.events.onMenuClicked,
+            },
             action: {
                 setBadgeBackgroundColor: async () => undefined,
                 setBadgeText: async () => undefined,
@@ -68,7 +86,8 @@ vi.mock('wxt/browser', () => {
                 create: async () => undefined,
             },
             runtime: {
-                onInstalled: idle(),
+                onInstalled: fake.events.onInstalled,
+                onStartup: idle(),
                 onMessage: fake.events.onMessage,
                 onConnect: fake.events.onConnect,
                 openOptionsPage: fake.openOptionsPage,
@@ -85,6 +104,7 @@ vi.mock('wxt/browser', () => {
                     return tab;
                 },
                 query: async () => [],
+                sendMessage: async () => undefined,
                 create: fake.create,
                 update: fake.update,
                 remove: fake.remove,
@@ -165,10 +185,32 @@ async function start(checkpoint: Partial<Checkpoint> = {}): Promise<void> {
     await vi.advanceTimersByTimeAsync(0);
 }
 
+/**
+ * Connect a side panel to the worker.
+ *
+ * @returns What the worker sent the panel, and a sender of panel messages.
+ */
+function connect(): {
+    received: SwToPanelMessage[];
+    send: (message: PanelToSwMessage) => void;
+} {
+    const received: SwToPanelMessage[] = [];
+    let onMessage: (message: PanelToSwMessage) => void = () => undefined;
+    const [listener] = fake.events.onConnect.listeners as ((port: object) => void)[];
+    listener({
+        name: 'muk-ai-panel',
+        postMessage: (message: SwToPanelMessage) => received.push(message),
+        onMessage: { addListener: (fn: typeof onMessage) => (onMessage = fn) },
+        onDisconnect: { addListener: () => undefined },
+    });
+    return { received, send: (message) => onMessage(message) };
+}
+
 beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    fake.events.onMessage.listeners.length = 0;
-    fake.events.onConnect.listeners.length = 0;
+    for (const event of Object.values(fake.events)) {
+        event.listeners.length = 0;
+    }
     fake.tabs.clear();
     vi.clearAllMocks();
     requests = [];
@@ -303,6 +345,27 @@ describe('background options', () => {
     });
 });
 
+describe('background card', () => {
+    it('fetches the card of the agent tab once per site', async () => {
+        const acme = { name: 'Acme', path: '/odoo/res.partner/7', details: [] };
+        routes['/muk_ai_browser/card'] = () =>
+            json({ host: 'acme.com', partner: acme, actions: [] });
+        fake.tabs.set(5, { id: 5, url: 'https://acme.com/a', title: 'A' });
+        await start({ agentTabId: 5 });
+        expect((await status()).card).toMatchObject({ partner: acme });
+        fake.tabs.set(5, { id: 5, url: 'https://acme.com/b', title: 'B' });
+        await status();
+        routes['/muk_ai_browser/card'] = () => json({});
+        fake.tabs.set(5, { id: 5, url: 'https://other.example/', title: 'C' });
+        expect((await status()).card).toBeNull();
+        expect(
+            requests
+                .filter((request) => request.path === '/muk_ai_browser/card')
+                .map((request) => request.auth),
+        ).toEqual(['Bearer k-1', 'Bearer k-1']);
+    });
+});
+
 describe('background polling', () => {
     const SESSION = { browserSessionId: 'bs-1', aiSessionId: 42 };
 
@@ -360,4 +423,60 @@ describe('background polling', () => {
             expect(await status()).toMatchObject({ paired: true, link, error });
         },
     );
+});
+
+describe('background context menu', () => {
+    it('creates the selection menu on install, replacing the earlier one', async () => {
+        await start();
+        const [installed] = fake.events.onInstalled.listeners as ((details: {
+            reason: string;
+        }) => void)[];
+        installed({ reason: 'update' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fake.removeMenus).toHaveBeenCalledOnce();
+        expect(fake.createMenu.mock.calls.map(([item]) => item)).toEqual([
+            { id: 'muk-ai', title: 'MuK AI Browser', contexts: ['selection'] },
+            {
+                id: 'muk-ai-ask',
+                parentId: 'muk-ai',
+                title: 'Ask MuK AI about this',
+                contexts: ['selection'],
+            },
+            {
+                id: 'muk-ai-contact',
+                parentId: 'muk-ai',
+                title: 'Create a contact from this',
+                contexts: ['selection'],
+            },
+        ]);
+    });
+
+    it.each([
+        ['muk-ai-ask', '> Jane Doe\n> ACME\n\n'],
+        [
+            'muk-ai-contact',
+            'Create a contact in Odoo from this text:\n\n> Jane Doe\n> ACME',
+        ],
+    ])('opens the panel from %s and hands its window the text', async (id, text) => {
+        await start();
+        const [clicked] = fake.events.onMenuClicked.listeners as ((
+            info: object,
+            tab: object,
+        ) => void)[];
+        clicked(
+            { menuItemId: id, selectionText: 'Jane Doe\nACME' },
+            { id: 3, windowId: 5 },
+        );
+        expect(fake.openPanel).toHaveBeenCalledWith({ tabId: 3 });
+        const other = connect();
+        const panel = connect();
+        other.send({ type: 'panel/open', windowId: 6 });
+        panel.send({ type: 'panel/open', windowId: 5 });
+        panel.send({ type: 'panel/open', windowId: 5 });
+        await vi.advanceTimersByTimeAsync(0);
+        const composed = (port: ReturnType<typeof connect>) =>
+            port.received.filter((message) => message.type === 'sw/compose');
+        expect(composed(other)).toEqual([]);
+        expect(composed(panel)).toEqual([{ type: 'sw/compose', text }]);
+    });
 });

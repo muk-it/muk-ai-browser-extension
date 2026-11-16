@@ -17,7 +17,7 @@ import { errorText, sleep } from './util';
  * Mutating tools wait for the DOM to settle and return a fresh snapshot.
  *
  * Tools prefixed `_` are steps of tools the service worker drives (trusted
- * input, screenshots); the agent never calls them by name.
+ * input, screenshots, file tools); the agent never calls them by name.
  */
 
 /** One field of `browser_fill_form`. */
@@ -41,7 +41,19 @@ export const MUTATING_TOOLS = new Set([
     'browser_press_key',
     'browser_hover',
     'browser_scroll',
+    'browser_upload_file',
+    '_upload',
 ]);
+
+/** Attribute that holds the file URL of each element that links a file. */
+const FILE_LINKS: Record<string, string> = {
+    a: 'href',
+    img: 'src',
+    embed: 'src',
+    iframe: 'src',
+    source: 'src',
+    object: 'data',
+};
 
 /** `autocomplete` tokens of fields the extension never fills. */
 const SENSITIVE_AUTOCOMPLETE = /^(cc-.+|current-password|new-password|one-time-code)$/;
@@ -120,6 +132,10 @@ async function run(name: string, args: Args, ctx: ActionContext): Promise<ToolRe
             return locate(args);
         case '_layout':
             return layout(args);
+        case '_link':
+            return fileLink(resolveRef(String(args.ref)));
+        case '_upload':
+            return upload(resolveRef(String(args.ref)), args);
         case '_settle':
             await settle(ctx.settle);
             return { ok: true, snapshot: snapshotText() };
@@ -136,8 +152,8 @@ async function run(name: string, args: Args, ctx: ActionContext): Promise<ToolRe
 // ----------------------------------------------------------
 
 /**
- * Refuse fields the user must fill in: passwords, payment cards, one-time
- * codes and file uploads. Fields are told by tag name, which also holds for
+ * Refuse fields the user must fill in (passwords, payment cards, one-time
+ * codes) and file fields, which only `browser_upload_file` fills. Fields are told by tag name, which also holds for
  * elements of a same-origin frame.
  *
  * @param el - The target element.
@@ -148,7 +164,7 @@ function refuseField(el: Element): ToolResult | null {
     if (input?.type === 'file') {
         return failure(
             'file_upload',
-            'The browser agent never uploads files: ask the user to choose the file.',
+            'Use browser_upload_file to put an Odoo file into this field.',
         );
     }
     const tokens = (el.getAttribute('autocomplete') ?? '').toLowerCase().split(/\s+/);
@@ -537,6 +553,54 @@ function layout(args: Args): ToolResult {
         ? markScreenshotTargets().map(({ ref, rect }) => ({ ref, ...toRect(rect) }))
         : [];
     return { ok: true, dpr: window.devicePixelRatio || 1, marks, crop };
+}
+
+/**
+ * Return the absolute URL of the file an element links or shows.
+ *
+ * @param el - A link, image, embed, frame, media source or object.
+ * @returns The file URL.
+ */
+function fileLink(el: Element): ToolResult {
+    const attribute = FILE_LINKS[el.localName];
+    const value = attribute && el.getAttribute(attribute);
+    if (!value) {
+        return failure(
+            'no_file_link',
+            'The element links no file: give the ref of a link, image or embedded ' +
+                'document, or the url of the file.',
+        );
+    }
+    return { ok: true, url: new URL(value, el.baseURI).href };
+}
+
+/**
+ * Put a file into a file field and fire `input` and `change`. The field is
+ * told by tag name and type, which also holds in a same-origin frame.
+ *
+ * @param el - The file field.
+ * @param args - `name`, `mimetype` and the base64 `data` of the file.
+ * @returns The upload result.
+ */
+function upload(el: Element, args: Args): ToolResult {
+    if (el.localName !== 'input' || (el as HTMLInputElement).type !== 'file') {
+        return failure(
+            'not_a_file_input',
+            'The element is not a file field: give the ref of a file input.',
+        );
+    }
+    const bytes = Uint8Array.from(atob(String(args.data)), (char) =>
+        char.charCodeAt(0),
+    );
+    const transfer = new DataTransfer();
+    transfer.items.add(
+        new File([bytes], String(args.name), { type: String(args.mimetype) }),
+    );
+    const input = el as HTMLInputElement;
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true };
 }
 
 // ----------------------------------------------------------

@@ -66,6 +66,7 @@ describe('snapshot', () => {
             ['- button "Menu" [disabled] [expanded]'],
         ],
         ['<h3>Title</h3>', ['- heading "Title" [level=3]']],
+        ['<input type="file" aria-label="Invoice">', ['- textbox "Invoice" [file]']],
         ['<select multiple aria-label="Tags"></select>', ['- listbox "Tags"']],
         [
             '<span id="l">From labelledby</span><button aria-labelledby="l" aria-label="x">T</button>',

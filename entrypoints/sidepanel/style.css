@@ -57,6 +57,46 @@ body {
 
 /* ---------------------------------------------------------- Agent bar */
 
+.mk-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--mk-border);
+    background: var(--mk-surface);
+}
+
+.mk-card__avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--mk-brand);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.mk-card__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.mk-card__text b,
+.mk-card__text small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mk-card__text small {
+    color: var(--mk-muted);
+}
+
 .mk-agentbar {
     display: flex;
     align-items: center;
@@ -304,4 +344,10 @@ body {
     margin: 8px 0 0;
     font-size: 12px;
     color: var(--mk-err);
+}
+
+.mk-btn--small {
+    flex: none;
+    padding: 3px 9px;
+    font-size: 12px;
 }

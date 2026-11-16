@@ -10,7 +10,8 @@
 
 A Chrome extension that lets a MuK AI agent from your Odoo read and act on the
 web pages you work on: read a page, find elements, click, type, fill forms,
-navigate, open tabs and take screenshots. Chrome's side panel shows your
+navigate, open tabs, take screenshots, save files from a site to an Odoo
+record and put Odoo files into a site's upload field. Chrome's side panel shows your
 Odoo's own MuK AI chat; the agent, its approvals, the per-site rules and the
 audit trail live in your Odoo.
 
@@ -50,7 +51,25 @@ shows **Log in to Odoo** or **Odoo is not reachable** until it is ready.
 The chat open in the panel is the one the agent acts for. While it is not
 working, the agent follows the tab you look at; the bar above the chat names
 that site (with a pulsing dot while the agent works), and clicking it brings
-the tab to the front. Tabs the agent opens join a tab group named "MuK AI".
+the tab to the front. Tabs the agent opens join a tab group named "MuK AI";
+the agent can read every tab of the group, for example to compare two pages,
+without switching to it.
+
+Above that bar the extension shows the company in your Odoo behind the site of
+the agent's tab, with **Open** to show it in the tab group, or buttons such as
+**+ Contact** that put a prompt into the chat. Odoo decides what the card says;
+with MuK AI CRM it adds the open opportunities and the last order.
+
+**Alt+M** opens the side panel (change it at `chrome://extensions/shortcuts`).
+Right-click selected text for **MuK AI Browser > Ask MuK AI about this** or
+**Create a contact from this**: the panel opens with the text quoted in the
+chat's composer.
+
+**Files.** `browser_save_file` downloads a file from a site (a link, an image,
+or the PDF open in the tab) with your cookies for that site and attaches it
+to an Odoo record. `browser_upload_file` puts an Odoo attachment into a
+site's file field. Saving follows the site's rule like any other action;
+every upload asks you first. Files larger than 20 MB are refused.
 
 ## Permissions
 
@@ -62,6 +81,7 @@ the tab to the front. Tabs the agent opens join a tab group named "MuK AI".
 | `activeTab`                         | Lets the agent act on the tab where you clicked the toolbar button, without all-site access.   |
 | `tabs`, `tabGroups`                 | Finds the agent's tab, opens and closes its own tabs and groups them as "MuK AI".              |
 | `alarms`                            | Resumes polling Odoo after Chrome suspends the extension, only while a chat is active.         |
+| `contextMenus`                      | The "Ask MuK AI about this" and "Create a contact from this" items on selected text.           |
 | Your Odoo's address (asked on save) | Talks to your Odoo, checks the login and reads the pairing code on its connect page.           |
 | All sites (optional)                | Lets the agent read and act on any page, and shows the MuK AI tab. Otherwise only `activeTab`. |
 
@@ -74,12 +94,13 @@ does not request it and answers `trusted: true` calls with
 ## Privacy
 
 The extension talks only to the Odoo you configured. It sends the chat id, the
-origin of the agent's tab, the device label (e.g. `Chrome on Windows`) and the
-results of the actions the agent asks for (page outline, screenshots, URL and
-title). It reads pages only when the agent asks, only in the agent's tab, never
-types into password, payment-card or one-time-code fields and never uploads
-files. Your Odoo decides per site whether the agent may act, must ask, or is
-blocked.
+origin of the agent's tabs, the device label (e.g. `Chrome on Windows`) and
+the results of the actions the agent asks for (page outline, screenshots, URL
+and title, files it saves). It reads pages only when the agent asks, only in
+the agent's tabs, and never types into password, payment-card or
+one-time-code fields. It puts a file into a site's upload field only after you
+approved it in Odoo. Your Odoo decides per site whether the agent may act,
+must ask, or is blocked.
 
 ## Develop
 

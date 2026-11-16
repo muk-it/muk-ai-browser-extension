@@ -57,6 +57,7 @@ const STATUS: Status = {
     groupTabs: 1,
     working: false,
     chatId: 7,
+    card: null,
 };
 
 let container: HTMLDivElement;
@@ -185,6 +186,65 @@ describe('side panel', () => {
             { type: 'panel/attach', chatId: 42 },
             { type: 'panel/show', path: '/odoo/product.template/7' },
         ]);
+    });
+
+    it('posts the composer text to the frame once it reported', async () => {
+        await open('in');
+        const frame = container.querySelector('iframe')?.contentWindow ?? null;
+        const sent = vi
+            .spyOn(frame as Window, 'postMessage')
+            .mockImplementation(() => undefined);
+        act(() => port.listener?.({ type: 'sw/compose', text: '> Jane Doe' }));
+        expect(sent).not.toHaveBeenCalled();
+        post(ODOO, frame);
+        expect(sent.mock.calls).toEqual([
+            [{ type: 'muk_ai_browser.compose', text: '> Jane Doe' }, ODOO],
+        ]);
+    });
+
+    it('shows the card of the site, opens its company and composes its prompts', async () => {
+        await open('in');
+        const frame = container.querySelector('iframe')?.contentWindow ?? null;
+        const sent = vi
+            .spyOn(frame as Window, 'postMessage')
+            .mockImplementation(() => undefined);
+        post(ODOO, frame);
+        const card = (value: Status['card']) =>
+            act(() =>
+                port.listener?.({
+                    type: 'sw/status',
+                    status: { ...STATUS, card: value },
+                }),
+            );
+        const buttons = () =>
+            [...container.querySelectorAll('.mk-card button')] as HTMLButtonElement[];
+        card({
+            host: 'acme.com',
+            partner: {
+                name: 'Acme',
+                path: '/odoo/res.partner/7',
+                details: ['1 open opportunity', 'Vienna'],
+            },
+            actions: [{ label: 'Opportunity', prompt: 'Create an opportunity' }],
+        });
+        expect(container.querySelector('.mk-card')?.textContent).toBe(
+            'AAcme1 open opportunity · ViennaOpen+ Opportunity',
+        );
+        act(() => buttons()[0].click());
+        act(() => buttons()[1].click());
+        expect(port.sent).toContainEqual({
+            type: 'panel/show',
+            path: '/odoo/res.partner/7',
+        });
+        expect(sent.mock.calls).toEqual([
+            [{ type: 'muk_ai_browser.compose', text: 'Create an opportunity' }, ODOO],
+        ]);
+        card({ host: 'new.example', partner: null, actions: [] });
+        expect(container.querySelector('.mk-card')?.textContent).toBe(
+            'NNot in Odoo yetnew.example',
+        );
+        card(null);
+        expect(container.querySelector('.mk-card')).toBeNull();
     });
 
     it('shows a loading state until the chat opens, and a retry when slow', async () => {

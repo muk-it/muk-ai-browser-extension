@@ -82,6 +82,10 @@ export function Options() {
                 <div className="mk-header__text">
                     <h1>MuK AI Browser</h1>
                     <p>Your Odoo AI assistant, reading and acting in this browser.</p>
+                    <p>
+                        Alt+M opens the side panel; change the shortcut at
+                        chrome://extensions/shortcuts.
+                    </p>
                 </div>
                 <p className={status.paired ? 'mk-state mk-state--ok' : 'mk-state'}>
                     {status.paired ? `${status.userName} on ${host}` : 'Not connected'}

@@ -37,6 +37,12 @@ async function refs(html: string): Promise<string[]> {
     return found;
 }
 
+/** The part of `DataTransfer` the upload uses, which jsdom lacks. */
+class FakeDataTransfer {
+    files: File[] = [];
+    items = { add: (file: File) => this.files.push(file) };
+}
+
 beforeEach(() => {
     __resetPerceptionState();
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(RECT);
@@ -44,6 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
 });
 
@@ -97,19 +104,45 @@ describe('performAction', () => {
     });
 
     it.each([
-        ['browser_type', '<input type="password">', 'sensitive_field'],
-        ['browser_type', '<input name="password">', 'sensitive_field'],
-        ['browser_type', '<input autocomplete="cc-number">', 'sensitive_field'],
-        ['browser_type', '<input autocomplete="one-time-code">', 'sensitive_field'],
-        ['browser_type', '<input autocomplete="new-password">', 'sensitive_field'],
-        ['browser_fill_form', '<input autocomplete="cc-csc">', 'sensitive_field'],
-        ['browser_fill_form', '<input type="file">', 'file_upload'],
+        ['browser_type', '<input type="password">', 'sensitive_field', /ask the user/],
+        ['browser_type', '<input name="password">', 'sensitive_field', /ask the user/],
+        [
+            'browser_type',
+            '<input autocomplete="cc-number">',
+            'sensitive_field',
+            /ask the user/,
+        ],
+        [
+            'browser_type',
+            '<input autocomplete="one-time-code">',
+            'sensitive_field',
+            /ask the user/,
+        ],
+        [
+            'browser_type',
+            '<input autocomplete="new-password">',
+            'sensitive_field',
+            /ask the user/,
+        ],
+        [
+            'browser_fill_form',
+            '<input autocomplete="cc-csc">',
+            'sensitive_field',
+            /ask the user/,
+        ],
+        [
+            'browser_fill_form',
+            '<input type="file">',
+            'file_upload',
+            /^Use browser_upload_file/,
+        ],
         [
             'browser_select_option',
             '<select autocomplete="cc-exp-month"><option>01</option></select>',
             'sensitive_field',
+            /ask the user/,
         ],
-    ])('refuses %s into %s', async (tool, field, error) => {
+    ])('refuses %s into %s', async (tool, field, error, message) => {
         const [name, ref] = await refs(
             `<input aria-label="Name"><label>F ${field}</label>`,
         );
@@ -124,7 +157,7 @@ describe('performAction', () => {
             CTX,
         );
         expect(result).toMatchObject({ ok: false, error });
-        expect(result.ok || result.message).toMatch(/ask the user/);
+        expect(result.ok || result.message).toMatch(message);
         expect((document.querySelector('input') as HTMLInputElement).value).toBe('');
     });
 
@@ -222,5 +255,48 @@ describe('performAction', () => {
             CTX,
         );
         expect(located).toMatchObject(expected);
+    });
+
+    it.each([
+        ['<a href="/files/offer.pdf">Offer</a>', '/files/offer.pdf'],
+        ['<img alt="Invoice" src="invoice.png">', '/invoice.png'],
+        ['<button>Offer</button>', null],
+    ])('resolves the file link of %s to %s', async (html, path) => {
+        const [ref] = await refs(html);
+        expect(await performAction('_link', { ref }, CTX)).toMatchObject(
+            path
+                ? { ok: true, url: new URL(path, location.href).href }
+                : { ok: false, error: 'no_file_link' },
+        );
+    });
+
+    it.each([
+        ['<input type="file" aria-label="Scan">', true],
+        ['<input aria-label="Scan">', false],
+    ])('puts an Odoo file into %s: %s', async (html, uploads) => {
+        vi.stubGlobal('DataTransfer', FakeDataTransfer);
+        const [ref] = await refs(html);
+        const input = document.querySelector('input') as HTMLInputElement;
+        let files: File[] = [];
+        Object.defineProperty(input, 'files', {
+            set: (value: File[]) => (files = value),
+        });
+        const events: string[] = [];
+        document.body.addEventListener('input', () => events.push('input'));
+        document.body.addEventListener('change', () => events.push('change'));
+        const result = await performAction(
+            '_upload',
+            { ref, name: 'scan.pdf', mimetype: 'application/pdf', data: btoa('%PDF') },
+            CTX,
+        );
+        expect(result).toMatchObject(
+            uploads
+                ? { ok: true, snapshot: expect.any(String) }
+                : { ok: false, error: 'not_a_file_input' },
+        );
+        expect(events).toEqual(uploads ? ['input', 'change'] : []);
+        expect(files.map((file) => [file.name, file.type, file.size])).toEqual(
+            uploads ? [['scan.pdf', 'application/pdf', 4]] : [],
+        );
     });
 });

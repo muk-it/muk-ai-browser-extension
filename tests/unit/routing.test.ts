@@ -10,6 +10,8 @@ describe('routeTool', () => {
     it.each([
         ['browser_read_page', {}, 'content'],
         ['browser_find', { query: 'x' }, 'content'],
+        ['browser_find', { query: 'x', tab_id: 3 }, 'other_tab'],
+        ['browser_click', { ref: 'e1', tab_id: 3 }, 'content'],
         ['browser_fill_form', { fields: [] }, 'content'],
         ['browser_click', { ref: 'e1' }, 'content'],
         ['browser_click', { ref: 'e1', trusted: true }, 'trusted'],

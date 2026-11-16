@@ -82,13 +82,19 @@ describe('odoo client', () => {
         });
     });
 
-    it('polls with the session token and the agent tab origin', async () => {
+    it('polls with the session token, the agent tab origin and its tabs', async () => {
         respond(200, { state: 'done', actions: [], plan_origins: [], retry_ms: 5000 });
-        const response = await poll(TARGET, 'https://shop.example');
-        expect(calls[0].url).toBe(
-            'https://odoo.example/muk_ai_browser/events?browser_session_id=bs-7' +
-                '&origin=https%3A%2F%2Fshop.example',
-        );
+        const response = await poll(TARGET, 'https://shop.example', [
+            { id: 3, origin: 'https://shop.example' },
+            { id: 5, origin: '' },
+        ]);
+        const url = new URL(calls[0].url);
+        expect(url.pathname).toBe('/muk_ai_browser/events');
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+            browser_session_id: 'bs-7',
+            origin: 'https://shop.example',
+            tabs: '[{"id":3,"origin":"https://shop.example"},{"id":5,"origin":""}]',
+        });
         expect(calls[0].init.method).toBe('GET');
         expect(response.retry_ms).toBe(5000);
     });
@@ -116,7 +122,7 @@ describe('odoo client', () => {
         [200, '<html>Login</html>', 'bad_response', 'does not understand'],
     ])('reads a %s answer as an error', async (code, body, errorCode, message) => {
         respond(code, body);
-        const error = await poll(TARGET, '').catch((caught: unknown) => caught);
+        const error = await poll(TARGET, '', []).catch((caught: unknown) => caught);
         expect(error).toBeInstanceOf(OdooError);
         expect(error).toMatchObject({ status: code, code: errorCode });
         expect((error as Error).message).toContain(message);
@@ -124,13 +130,13 @@ describe('odoo client', () => {
 
     it('reads a failed connection as Odoo not answering', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
-        const error = await poll(TARGET, '').catch((caught: unknown) => caught);
+        const error = await poll(TARGET, '', []).catch((caught: unknown) => caught);
         expect(error).toMatchObject({ status: 0, code: 'network' });
         expect(isUnreachable(error)).toBe(true);
     });
 
     it('refuses a session call while unpaired, without a request', async () => {
-        await expect(poll({ ...TARGET, apiKey: null }, '')).rejects.toMatchObject({
+        await expect(poll({ ...TARGET, apiKey: null }, '', [])).rejects.toMatchObject({
             status: 401,
         });
         expect(calls).toHaveLength(0);

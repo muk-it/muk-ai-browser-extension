@@ -1,3 +1,5 @@
+import { type FileData, downloadedFile } from './util';
+
 /**
  * HTTP client for the `muk_ai_browser` routes. Only the service worker calls
  * these (content scripts cannot bypass CORS). Every route except `/pair` sends
@@ -47,7 +49,7 @@ export function isUnreachable(error: unknown): boolean {
 }
 
 /** What a session-bound call needs to address the server. */
-interface OdooTarget {
+export interface OdooTarget {
     odooUrl: string | null;
     apiKey: string | null;
     browserSessionId: string | null;
@@ -83,8 +85,55 @@ export interface PollResponse {
 }
 
 /**
- * Perform a JSON request and decode the response. A 404 without an error code
- * comes from an Odoo that lacks the route, so without the app.
+ * Send a request to Odoo. A 404 without an error code comes from an Odoo that
+ * lacks the route, so without the app.
+ *
+ * @param url - Absolute URL.
+ * @param apiKey - Bearer key, or `null` for the unauthenticated `/pair`.
+ * @param body - JSON body for a POST; a GET is sent when omitted.
+ * @returns The successful response.
+ * @throws {OdooError} When Odoo does not answer or fails.
+ */
+async function send(
+    url: string,
+    apiKey: string | null,
+    body?: object,
+): Promise<Response> {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (apiKey) {
+        headers.Authorization = `Bearer ${apiKey}`;
+    }
+    if (body) {
+        headers['Content-Type'] = 'application/json';
+    }
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: body ? 'POST' : 'GET',
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+            credentials: 'omit',
+        });
+    } catch {
+        throw new OdooError(0, 'network');
+    }
+    if (!response.ok) {
+        const data = parseJson(await response.text().catch(() => ''));
+        const code = (data as { error?: unknown } | null)?.error;
+        throw new OdooError(
+            response.status,
+            typeof code === 'string'
+                ? code
+                : response.status === 404
+                  ? 'app_missing'
+                  : '',
+        );
+    }
+    return response;
+}
+
+/**
+ * Perform a JSON request and decode the response.
  *
  * @param url - Absolute URL.
  * @param apiKey - Bearer key, or `null` for the unauthenticated `/pair`.
@@ -97,38 +146,14 @@ async function request<T>(
     apiKey: string | null,
     body?: object,
 ): Promise<T> {
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
-    }
-    if (body) {
-        headers['Content-Type'] = 'application/json';
-    }
-    let response: Response;
+    const response = await send(url, apiKey, body);
     let text: string;
     try {
-        response = await fetch(url, {
-            method: body ? 'POST' : 'GET',
-            headers,
-            body: body ? JSON.stringify(body) : undefined,
-            credentials: 'omit',
-        });
         text = await response.text();
     } catch {
         throw new OdooError(0, 'network');
     }
     const data = parseJson(text);
-    if (!response.ok) {
-        const code = (data as { error?: unknown } | null)?.error;
-        throw new OdooError(
-            response.status,
-            typeof code === 'string'
-                ? code
-                : response.status === 404
-                  ? 'app_missing'
-                  : '',
-        );
-    }
     if (data === undefined) {
         throw new OdooError(response.status, 'bad_response');
     }
@@ -224,17 +249,56 @@ export function openSession(
     });
 }
 
+/** A tab the agent may use, with its origin (`''` for a page without one). */
+export interface TabOrigin {
+    id: number;
+    origin: string;
+}
+
 /**
  * Fetch the chat state and the pending browser actions.
  *
  * @param target - The addressing checkpoint subset.
  * @param origin - Origin of the agent's tab, `''` when it has none.
+ * @param tabs - The agent's tabs, on which Odoo judges calls with a `tab_id`.
  * @returns The poll response.
  */
-export async function poll(target: OdooTarget, origin: string): Promise<PollResponse> {
+export async function poll(
+    target: OdooTarget,
+    origin: string,
+    tabs: TabOrigin[],
+): Promise<PollResponse> {
     const { base, key, session } = bound(target);
-    const query = new URLSearchParams({ browser_session_id: session, origin });
+    const query = new URLSearchParams({
+        browser_session_id: session,
+        origin,
+        tabs: JSON.stringify(tabs),
+    });
     return request(`${base}/muk_ai_browser/events?${query}`, key);
+}
+
+/**
+ * Download the Odoo file of a `browser_upload_file` call.
+ *
+ * @param target - The addressing checkpoint subset.
+ * @param callId - The call id.
+ * @returns The file.
+ * @throws {OdooError} When Odoo does not answer or refuses the file.
+ */
+export async function downloadFile(
+    target: OdooTarget,
+    callId: string,
+): Promise<FileData> {
+    const { base, key, session } = bound(target);
+    const query = new URLSearchParams({ browser_session_id: session, call_id: callId });
+    const response = await send(`${base}/muk_ai_browser/file?${query}`, key);
+    let body: ArrayBuffer;
+    try {
+        body = await response.arrayBuffer();
+    } catch {
+        throw new OdooError(0, 'network');
+    }
+    return downloadedFile(response, body, 'download');
 }
 
 /**
@@ -264,6 +328,34 @@ export async function postResult(
             throw error;
         }
     }
+}
+
+/** The company in Odoo behind the site of a page, as its card shows it. */
+export interface PageCard {
+    host: string;
+    partner: { name: string; path: string; details: string[] } | null;
+    actions: { label: string; prompt: string }[];
+}
+
+/**
+ * Fetch the card of a page: the company in Odoo behind its site.
+ *
+ * @param odooUrl - The configured Odoo origin.
+ * @param apiKey - The device key.
+ * @param url - The page.
+ * @returns The card, or `null` for a page without one, such as the Odoo itself.
+ */
+export async function fetchCard(
+    odooUrl: string,
+    apiKey: string,
+    url: string,
+): Promise<PageCard | null> {
+    const query = new URLSearchParams({ url });
+    const card = await request<Partial<PageCard>>(
+        `${odooUrl}/muk_ai_browser/card?${query}`,
+        apiKey,
+    );
+    return card.host ? (card as PageCard) : null;
 }
 
 /** What a check of the configured Odoo found. */

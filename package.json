@@ -1,6 +1,6 @@
 {
     "name": "muk-ai-browser-extension",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "description": "Chrome extension for the MuK AI browser agent: page actions for the muk_ai_browser Odoo app, with its chat in the side panel.",
     "license": "Apache-2.0",
     "author": "MuK IT",

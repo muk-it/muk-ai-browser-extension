@@ -59,6 +59,12 @@ const { runTool } = await import('../../lib/runner');
 
 const PLAN = ['https://shop.example'];
 
+const TARGET = {
+    odooUrl: 'https://odoo.example',
+    apiKey: 'k-1',
+    browserSessionId: 'bs-1',
+};
+
 /**
  * Run a tool call, letting the runner's waits for the page elapse.
  *
@@ -73,10 +79,10 @@ async function run(
     tabs: Partial<AgentTabs> = {},
 ): ReturnType<typeof runTool> {
     const outcome = runTool(
-        name,
-        args,
+        { call_id: 'c1', name, arguments: args },
         { tabId: 1, groupId: 8, opened: [], ...tabs },
         PLAN,
+        TARGET,
     );
     await vi.advanceTimersByTimeAsync(1000);
     return outcome;
@@ -102,6 +108,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
 });
 
@@ -119,6 +126,7 @@ describe('runTool', () => {
         ],
         ['browser_tabs', { action: 'close', tab_id: 1 }, {}, 'not_agent_tab'],
         ['browser_tabs', { action: 'close', tab_id: 9 }, {}, 'unknown_tab'],
+        ['browser_save_file', { url: 'file:///etc/passwd' }, {}, 'bad_url'],
     ])('refuses %s %o in %o with %s', async (name, args, tabs, error) => {
         const { result } = await run(name, args, tabs);
         expect(result).toMatchObject({ ok: false, error });
@@ -155,23 +163,33 @@ describe('runTool', () => {
         });
     });
 
-    it('injects the content script when no tool answers in the tab', async () => {
-        fake.sendMessage
-            .mockRejectedValueOnce(
-                new Error(
-                    'Could not establish connection. Receiving end does not exist.',
+    it.each([
+        [
+            'no listener',
+            () =>
+                Promise.reject(
+                    new Error(
+                        'Could not establish connection. Receiving end does not exist.',
+                    ),
                 ),
-            )
-            .mockResolvedValueOnce({ ok: true, matches: [] });
-        const { result, origin } = await run('browser_find', { query: 'Pay' });
-        expect(fake.executeScript).toHaveBeenCalledWith({
-            target: { tabId: 1 },
-            files: ['/content-scripts/content.js'],
-        });
-        expect(fake.sendMessage).toHaveBeenCalledTimes(2);
-        expect(result).toEqual({ ok: true, matches: [] });
-        expect(origin).toBe('https://shop.example');
-    });
+        ],
+        ['only the launcher', () => Promise.resolve(undefined)],
+    ])(
+        'injects the content script when %s answers in the tab',
+        async (_label, first) => {
+            fake.sendMessage
+                .mockImplementationOnce(first)
+                .mockResolvedValueOnce({ ok: true, matches: [] });
+            const { result, origin } = await run('browser_find', { query: 'Pay' });
+            expect(fake.executeScript).toHaveBeenCalledWith({
+                target: { tabId: 1 },
+                files: ['/content-scripts/content.js'],
+            });
+            expect(fake.sendMessage).toHaveBeenCalledTimes(2);
+            expect(result).toEqual({ ok: true, matches: [] });
+            expect(origin).toBe('https://shop.example');
+        },
+    );
 
     it.each([
         [
@@ -210,4 +228,150 @@ describe('runTool', () => {
             ).toEqual(name === 'browser_click' ? [name, 'browser_read_page'] : [name]);
         },
     );
+});
+
+describe('runTool across tabs', () => {
+    it.each([
+        [3, { ok: true, snapshot: '- heading "Opened"', tab_id: 3 }, [3]],
+        [4, { ok: false, error: 'unknown_tab' }, []],
+    ])('reads tab %s without switching to it', async (tabId, expected, readIn) => {
+        fake.tabs.set(4, { id: 4, url: 'https://bank.example/', status: 'complete' });
+        fake.sendMessage.mockResolvedValue({
+            ok: true,
+            snapshot: '- heading "Opened"',
+        });
+        const { result, tabs } = await run('browser_read_page', { tab_id: tabId });
+        expect(result).toMatchObject(expected);
+        expect(tabs.tabId).toBe(1);
+        expect(fake.sendMessage.mock.calls.map(([id]) => id)).toEqual(readIn);
+        expect(fake.update).not.toHaveBeenCalled();
+    });
+});
+
+describe('runTool files', () => {
+    /** Requests the stubbed fetch received. */
+    let fetched: { url: string; init: RequestInit }[];
+
+    /**
+     * Stub `fetch` with one response.
+     *
+     * @param body - The response body.
+     * @param init - Status and headers.
+     */
+    function respond(body: string, init: ResponseInit = {}): void {
+        fetched = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string, request: RequestInit) => {
+                fetched.push({ url, init: request });
+                return new Response(body, init);
+            }),
+        );
+    }
+
+    it.each([
+        [
+            { ref: 'e4' },
+            'https://shop.example/files/offer.pdf',
+            "attachment; filename*=UTF-8''Offer%202026.pdf",
+            'Offer 2026.pdf',
+        ],
+        [
+            { url: 'https://cdn.example/scans/scan%201.pdf', name: 'Scan.pdf' },
+            'https://cdn.example/scans/scan%201.pdf',
+            'attachment; filename="other.pdf"',
+            'Scan.pdf',
+        ],
+        [
+            { url: 'https://cdn.example/scans/scan%201.pdf' },
+            'https://cdn.example/scans/scan%201.pdf',
+            '',
+            'scan 1.pdf',
+        ],
+        [{}, 'https://shop.example/cart', 'inline; filename="cart.pdf"', 'cart.pdf'],
+    ])(
+        'saves the file of %o with the site cookies',
+        async (args, url, disposition, name) => {
+            respond('%PDF', {
+                headers: {
+                    'Content-Type': 'application/pdf; qs=0.9',
+                    'Content-Disposition': disposition,
+                },
+            });
+            fake.sendMessage.mockResolvedValue({ ok: true, url });
+            const { result } = await run('browser_save_file', args);
+            expect(fetched).toEqual([{ url, init: { credentials: 'include' } }]);
+            expect(fake.sendMessage.mock.calls.map(([, message]) => message)).toEqual(
+                'ref' in args
+                    ? [
+                          {
+                              type: 'content/tool',
+                              name: '_link',
+                              arguments: { ref: 'e4' },
+                          },
+                      ]
+                    : [],
+            );
+            expect(result).toEqual({
+                ok: true,
+                file: { name, mimetype: 'application/pdf', data: btoa('%PDF') },
+            });
+        },
+    );
+
+    it.each([
+        [{ status: 403 }, '', 'fetch_failed'],
+        [
+            { headers: { 'Content-Length': String(21 * 1024 * 1024) } },
+            '',
+            'file_too_large',
+        ],
+        [{}, 'x'.repeat(20 * 1024 * 1024 + 1), 'file_too_large'],
+    ])('refuses to save a file answered with %o', async (init, body, error) => {
+        respond(body, init);
+        const { result } = await run('browser_save_file', {
+            url: 'https://cdn.example/big.pdf',
+        });
+        expect(result).toMatchObject({ ok: false, error });
+    });
+
+    it('uploads the Odoo file of the call into a field of the tab', async () => {
+        respond('%PDF', {
+            headers: {
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': 'attachment; filename="offer.pdf"',
+            },
+        });
+        fake.sendMessage.mockResolvedValue({ ok: true, snapshot: '- button "Send"' });
+        const { result } = await run('browser_upload_file', {
+            ref: 'e5',
+            element: 'Attachment',
+            attachment_id: 7,
+        });
+        expect(fetched).toEqual([
+            {
+                url: 'https://odoo.example/muk_ai_browser/file?browser_session_id=bs-1&call_id=c1',
+                init: expect.objectContaining({
+                    headers: expect.objectContaining({ Authorization: 'Bearer k-1' }),
+                    credentials: 'omit',
+                }),
+            },
+        ]);
+        expect(fake.sendMessage.mock.calls).toEqual([
+            [
+                1,
+                {
+                    type: 'content/tool',
+                    name: '_upload',
+                    arguments: {
+                        ref: 'e5',
+                        name: 'offer.pdf',
+                        mimetype: 'application/pdf',
+                        data: btoa('%PDF'),
+                    },
+                },
+            ],
+        ]);
+        expect(result).toEqual({ ok: true, snapshot: '- button "Send"' });
+    });
 });

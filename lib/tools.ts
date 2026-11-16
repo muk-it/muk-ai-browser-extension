@@ -9,7 +9,15 @@ import { originInScope, originOf } from './origin';
 
 /** Where a tool call runs. */
 export type Route =
-    'content' | 'trusted' | 'navigate' | 'navigate_back' | 'tabs' | 'screenshot';
+    | 'content'
+    | 'other_tab'
+    | 'trusted'
+    | 'navigate'
+    | 'navigate_back'
+    | 'tabs'
+    | 'screenshot'
+    | 'save_file'
+    | 'upload_file';
 
 /** Tools the content script runs. */
 const CONTENT_TOOLS = new Set([
@@ -25,6 +33,9 @@ const CONTENT_TOOLS = new Set([
     'browser_wait_for',
 ]);
 
+/** Content tools that accept `tab_id` to read another of the agent's tabs. */
+const OTHER_TAB_TOOLS = new Set(['browser_read_page', 'browser_find']);
+
 /** Tools that accept `trusted: true`. */
 const TRUSTED_TOOLS = new Set(['browser_click', 'browser_type', 'browser_press_key']);
 
@@ -34,6 +45,8 @@ const WORKER_TOOLS: Record<string, Route> = {
     browser_navigate_back: 'navigate_back',
     browser_tabs: 'tabs',
     browser_screenshot: 'screenshot',
+    browser_save_file: 'save_file',
+    browser_upload_file: 'upload_file',
 };
 
 /**
@@ -46,6 +59,9 @@ const WORKER_TOOLS: Record<string, Route> = {
 export function routeTool(name: string, args: Record<string, unknown>): Route | null {
     if (TRUSTED_TOOLS.has(name) && args.trusted === true) {
         return 'trusted';
+    }
+    if (OTHER_TAB_TOOLS.has(name) && args.tab_id != null) {
+        return 'other_tab';
     }
     if (CONTENT_TOOLS.has(name)) {
         return 'content';
@@ -84,11 +100,11 @@ export function scopeRefusal(
 }
 
 /**
- * Refuse a call the server judged on another origin than the agent's tab has
- * now (the tab navigated between the decision and the run).
+ * Refuse a call the server judged on another origin than the tab it runs in
+ * has now (the tab navigated between the decision and the run).
  *
  * @param judged - The origin the server judged the call on, if any.
- * @param current - Current origin of the agent's tab.
+ * @param current - Current origin of the tab the call runs in.
  * @returns A refusal, or `null` when the call may run.
  */
 export function originRefusal(

@@ -14,8 +14,12 @@ vi.mock('../../lib/storage', () => ({
 
 vi.mock('../../lib/runner', () => ({
     runTool,
+    agentTabs: async () => [
+        { id: 3, url: 'https://shop.example/cart' },
+        { id: 5, url: 'chrome://newtab/' },
+    ],
     tabOrigin: async (tabId: number | null) =>
-        tabId === 3 ? 'https://shop.example' : null,
+        ({ 3: 'https://shop.example', 5: 'https://other.example' })[tabId ?? 0] ?? null,
 }));
 
 const { RESULT_LOST, attach, pollOnce } = await import('../../lib/agent');
@@ -92,13 +96,14 @@ describe('agent', () => {
         expect(Object.fromEntries(requests[1].query)).toEqual({
             browser_session_id: 'bs-1',
             origin: 'https://shop.example',
+            tabs: '[{"id":3,"origin":"https://shop.example"},{"id":5,"origin":""}]',
         });
         expect(runTool.mock.calls).toEqual([
             [
-                'browser_click',
-                { ref: 'e2' },
+                pending[0],
                 { tabId: 3, groupId: null, opened: [] },
                 ['https://pay.example'],
+                expect.objectContaining({ apiKey: 'k-1', browserSessionId: 'bs-1' }),
             ],
         ]);
         expect(requests[2]).toEqual({
@@ -127,12 +132,14 @@ describe('agent', () => {
     });
 
     it.each([
-        ['browser_click', 'HTTPS://Shop.Example', true],
-        ['browser_click', 'https://evil.example', false],
-        ['browser_navigate', undefined, true],
-    ])('%s judged on %s runs: %s', async (name, origin, runs) => {
+        ['browser_click', {}, 'HTTPS://Shop.Example', true],
+        ['browser_click', {}, 'https://evil.example', false],
+        ['browser_navigate', {}, undefined, true],
+        ['browser_read_page', { tab_id: 5 }, 'https://other.example', true],
+        ['browser_read_page', { tab_id: 5 }, 'https://shop.example', false],
+    ])('%s %o judged on %s runs: %s', async (name, args, origin, runs) => {
         store.value = { ...store.value, browserSessionId: 'bs-1' };
-        pending = [{ call_id: 'c1', name, arguments: {}, ...(origin && { origin }) }];
+        pending = [{ call_id: 'c1', name, arguments: args, ...(origin && { origin }) }];
         await pollOnce();
         expect(runTool).toHaveBeenCalledTimes(runs ? 1 : 0);
         expect(store.value.executed).toEqual(runs ? ['c1'] : []);
@@ -145,8 +152,8 @@ describe('agent', () => {
                     ok: false,
                     error: 'origin_changed',
                     message:
-                        'The tab moved to https://shop.example before this action ran; ' +
-                        'read the page again.',
+                        `The tab moved to ${'tab_id' in args ? 'https://other.example' : 'https://shop.example'} ` +
+                        'before this action ran; read the page again.',
                 },
             });
         }

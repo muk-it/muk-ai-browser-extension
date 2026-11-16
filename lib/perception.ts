@@ -256,7 +256,13 @@ function walk(
             ref,
             role: role as string,
             name: computeAccessibleName(element, role),
-            states: computeStates(element, role),
+            states: [
+                ...computeStates(element, role),
+                ...(element.localName === 'input' &&
+                (element as HTMLInputElement).type === 'file'
+                    ? ['file']
+                    : []),
+            ],
             children: [],
             isNew: hasPreviousSnapshot && !previousRefs.has(ref),
         };

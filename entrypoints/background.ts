@@ -10,8 +10,16 @@ import {
 } from '../lib/messaging';
 import { getCheckpoint, patchCheckpoint } from '../lib/storage';
 import { unpairedPatch } from '../lib/checkpoint';
-import { OdooError, checkOdoo, isUnreachable, pair, unpair } from '../lib/odoo';
-import { attach, joinAgentGroup, pollOnce } from '../lib/agent';
+import {
+    OdooError,
+    type PageCard,
+    checkOdoo,
+    fetchCard,
+    isUnreachable,
+    pair,
+    unpair,
+} from '../lib/odoo';
+import { agentTabsOf, attach, joinAgentGroup, pollOnce } from '../lib/agent';
 import { normalizeOdooUrl, webUrl } from '../lib/origin';
 import { showInGroup, tabExists } from '../lib/runner';
 import { errorText } from '../lib/util';
@@ -33,6 +41,18 @@ const LAUNCHER_SCRIPT = 'muk-ai-launcher';
 /** How long the paired connect page shows its check mark before it closes. */
 const CONNECT_CLOSE_MS = 1500;
 
+/** Id of the context menu parent item. */
+const MENU = 'muk-ai';
+
+/** Context menu items on a selection, with the composer text (`%s` is the quote). */
+const MENU_ITEMS: Record<string, { title: string; text: string }> = {
+    'muk-ai-ask': { title: 'Ask MuK AI about this', text: '%s\n\n' },
+    'muk-ai-contact': {
+        title: 'Create a contact from this',
+        text: 'Create a contact in Odoo from this text:\n\n%s',
+    },
+};
+
 /**
  * Service worker: attaches this device to the chat the side panel's embedded
  * Odoo shows, polls its pending browser actions, runs them in the agent's tab
@@ -50,6 +70,10 @@ export default defineBackground({
         let polling: Promise<void> | null = null;
         let wake: (() => void) | null = null;
         let scripts: Promise<void> = Promise.resolve();
+        /** The card of the site the agent's tab was last on. */
+        let card: { host: string; value: PageCard | null } | null = null;
+        /** Composer text for the panel of a window, kept until that panel opens. */
+        let compose: { text: string; windowId: number } | null = null;
 
         // ----------------------------------------------------------
         // Lifecycle
@@ -62,9 +86,27 @@ export default defineBackground({
 
         browser.runtime.onInstalled.addListener(({ reason }) => {
             void syncContentScripts();
+            void createMenus();
             if (reason === 'install') {
                 void browser.runtime.openOptionsPage();
             }
+        });
+        browser.runtime.onStartup.addListener(() => void createMenus());
+        browser.contextMenus.onClicked.addListener((info, tab) => {
+            const item = MENU_ITEMS[String(info.menuItemId)];
+            if (!item || tab?.id == null || !info.selectionText) {
+                return;
+            }
+            void browser.sidePanel.open({ tabId: tab.id });
+            const quote = info.selectionText
+                .split('\n')
+                .map((line) => `> ${line}`)
+                .join('\n');
+            compose = {
+                text: item.text.replace('%s', () => quote),
+                windowId: tab.windowId,
+            };
+            deliverCompose();
         });
         browser.permissions.onAdded.addListener(() => void syncContentScripts());
         browser.permissions.onRemoved.addListener(() => void syncContentScripts());
@@ -163,6 +205,41 @@ export default defineBackground({
         }
 
         // ----------------------------------------------------------
+        // Context menu
+        // ----------------------------------------------------------
+
+        /** Create the context menu on a selection, replacing any earlier one. */
+        async function createMenus(): Promise<void> {
+            await browser.contextMenus.removeAll();
+            browser.contextMenus.create({
+                id: MENU,
+                title: 'MuK AI Browser',
+                contexts: ['selection'],
+            });
+            for (const [id, { title }] of Object.entries(MENU_ITEMS)) {
+                browser.contextMenus.create({
+                    id,
+                    parentId: MENU,
+                    title,
+                    contexts: ['selection'],
+                });
+            }
+        }
+
+        /** Hand the composer text to the panel of its window, once that panel is open. */
+        function deliverCompose(): void {
+            for (const [port, windowId] of panels) {
+                if (compose && windowId === compose.windowId) {
+                    port.postMessage({
+                        type: 'sw/compose',
+                        text: compose.text,
+                    } satisfies SwToPanelMessage);
+                    compose = null;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
         // Side panel port
         // ----------------------------------------------------------
 
@@ -195,6 +272,7 @@ export default defineBackground({
             switch (message.type) {
                 case 'panel/open':
                     panels.set(port, message.windowId);
+                    deliverCompose();
                     void tellLaunchers(message.windowId);
                     await adoptActiveTab();
                     await joinAgentGroup();
@@ -223,11 +301,10 @@ export default defineBackground({
                     if (!cp.odooUrl) {
                         return;
                     }
-                    const tabs = await showInGroup(`${cp.odooUrl}${message.path}`, {
-                        tabId: cp.agentTabId,
-                        groupId: cp.agentGroupId,
-                        opened: cp.agentOpenedTabIds,
-                    });
+                    const tabs = await showInGroup(
+                        `${cp.odooUrl}${message.path}`,
+                        agentTabsOf(cp),
+                    );
                     await patchCheckpoint({
                         agentGroupId: tabs.groupId,
                         agentOpenedTabIds: tabs.opened,
@@ -411,6 +488,7 @@ export default defineBackground({
                 await unpair(cp.odooUrl, cp.apiKey).catch(() => undefined);
             }
             await patchCheckpoint(unpairedPatch());
+            card = null;
             chatState = 'new';
             actionsPending = false;
             await setBadge();
@@ -574,6 +652,9 @@ export default defineBackground({
                 const wasWorking = working();
                 chatState = response.state;
                 actionsPending = response.actions.length > 0;
+                if (wasWorking && !working()) {
+                    card = null;
+                }
                 if (working() && !wasWorking) {
                     await joinAgentGroup();
                 }
@@ -691,7 +772,30 @@ export default defineBackground({
                 groupTabs: groupTabs.length,
                 working: working(),
                 chatId: cp.aiSessionId,
+                card: await cardOf(agentTab?.url),
             };
+        }
+
+        /**
+         * Return the card of a page's site, fetched once per site and again after
+         * the agent worked, since it may have created the company.
+         *
+         * @param url - The page of the agent's tab.
+         * @returns The card, or `null` without one.
+         */
+        async function cardOf(url: string | undefined): Promise<PageCard | null> {
+            const host = webUrl(url)?.host;
+            const { odooUrl, apiKey } = await getCheckpoint();
+            if (!host || !url || !odooUrl || !apiKey) {
+                return null;
+            }
+            if (card?.host !== host) {
+                card = {
+                    host,
+                    value: await fetchCard(odooUrl, apiKey, url).catch(() => null),
+                };
+            }
+            return card.value;
         }
 
         /** Send the status to every open panel. */

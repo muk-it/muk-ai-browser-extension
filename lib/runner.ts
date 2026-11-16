@@ -12,12 +12,13 @@ import {
 import { type Mark, type Rect, renderScreenshot } from './screenshot';
 import { routeTool, scopeRefusal } from './tools';
 import { originOf, webUrl } from './origin';
-import { errorText, sleep } from './util';
+import { type OdooTarget, type PendingAction, downloadFile } from './odoo';
+import { decodeName, downloadedFile, errorText, sleep } from './util';
 
 /**
  * Runs browser tool calls in the agent's tab group: content-script tools
- * through the on-demand content script, navigation, tabs and screenshots
- * through the extension APIs, and `trusted` input through the debugger. The
+ * through the on-demand content script, navigation, tabs, screenshots and
+ * files through the extension APIs, and `trusted` input through the debugger. The
  * agent works in the "MuK AI" tab group: the tab it acts in joins it, and so
  * does every tab it opens, by navigation or by a link.
  */
@@ -27,6 +28,12 @@ const GROUP_TITLE = 'MuK AI';
 
 /** Built path of the on-demand content script. */
 const CONTENT_SCRIPT = '/content-scripts/content.js';
+
+/** Largest file `browser_save_file` downloads, in bytes. */
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+/** A call to run: its id, tool name and arguments. */
+type Call = Pick<PendingAction, 'call_id' | 'name' | 'arguments'>;
 
 /** The agent's tabs, as the runner reads and updates them. */
 export interface AgentTabs {
@@ -50,22 +57,22 @@ interface RunOutcome {
 /**
  * Run one tool call.
  *
- * @param name - Tool name.
- * @param args - Tool arguments.
+ * @param call - The call.
  * @param tabs - The agent's tabs.
  * @param planOrigins - Origins of the approved plan.
+ * @param target - The Odoo the call came from, which serves uploaded files.
  * @returns The result and the agent's tabs afterwards.
  */
 export async function runTool(
-    name: string,
-    args: Record<string, unknown>,
+    call: Call,
     tabs: AgentTabs,
     planOrigins: readonly string[],
+    target: OdooTarget,
 ): Promise<RunOutcome> {
     const state = { ...tabs, opened: [...tabs.opened] };
     let result: ToolResult;
     try {
-        result = await dispatch(name, args, state, planOrigins);
+        result = await dispatch(call, state, planOrigins, target);
     } catch (error) {
         result = failure('failed', errorText(error));
     }
@@ -75,18 +82,20 @@ export async function runTool(
 /**
  * Route a call to its executor.
  *
- * @param name - Tool name.
- * @param args - Tool arguments.
+ * @param call - The call.
  * @param state - The agent's tabs, updated in place.
  * @param planOrigins - Origins of the approved plan.
+ * @param target - The Odoo the call came from.
  * @returns The tool result.
  */
 async function dispatch(
-    name: string,
-    args: Record<string, unknown>,
+    call: Call,
     state: AgentTabs,
     planOrigins: readonly string[],
+    target: OdooTarget,
 ): Promise<ToolResult> {
+    const { name } = call;
+    const args = call.arguments ?? {};
     const route = routeTool(name, args);
     if (!route) {
         return failure('unknown_tool', `The browser does not know the tool ${name}.`);
@@ -96,6 +105,9 @@ async function dispatch(
     }
     if (route === 'navigate' && (args.new_tab || state.tabId == null)) {
         return navigate(args, state);
+    }
+    if (route === 'other_tab') {
+        return readOtherTab(name, args, state);
     }
     if (state.tabId == null || !(await tabExists(state.tabId))) {
         state.tabId = null;
@@ -122,7 +134,36 @@ async function dispatch(
             return loaded(state.tabId);
         case 'screenshot':
             return screenshot(state.tabId, args);
+        case 'save_file':
+            return saveFile(tabId, args);
+        case 'upload_file':
+            return contentCall(tabId, '_upload', {
+                ref: args.ref,
+                ...(await downloadFile(target, call.call_id)),
+            });
     }
+}
+
+/**
+ * Run a read in another of the agent's tabs, without making it the agent's
+ * tab and without activating it.
+ *
+ * @param name - `browser_read_page` or `browser_find`.
+ * @param args - Tool arguments with `tab_id`.
+ * @param state - The agent's tabs.
+ * @returns The tool result with its `tab_id`.
+ */
+async function readOtherTab(
+    name: string,
+    args: Record<string, unknown>,
+    state: AgentTabs,
+): Promise<ToolResult> {
+    const tabId = Number(args.tab_id);
+    if (!(await agentTabs(state)).some((tab) => tab.id === tabId)) {
+        return failure('unknown_tab', `Tab ${tabId} is not one of the agent's tabs.`);
+    }
+    const result = await contentCall(tabId, name, args);
+    return result.ok ? { ...result, tab_id: tabId } : result;
 }
 
 // ----------------------------------------------------------
@@ -130,8 +171,9 @@ async function dispatch(
 // ----------------------------------------------------------
 
 /**
- * Run a tool in a tab's content script, injecting it when no tool answers
- * (the tab may hold other extension listeners, such as the launcher). A page
+ * Run a tool in a tab's content script, injecting it when no tool answers:
+ * the tab has no listener, or only others, such as the launcher, which leave
+ * the reply empty. A page
  * that unloads while an agent tool runs was navigated by it: the tool is not
  * run again, and its result is the loaded page.
  *
@@ -147,7 +189,11 @@ async function contentCall(
 ): Promise<ToolResult> {
     const message = { type: 'content/tool', name, arguments: args };
     try {
-        return (await browser.tabs.sendMessage(tabId, message)) as ToolResult;
+        const reply = (await browser.tabs.sendMessage(tabId, message)) as
+            ToolResult | undefined;
+        if (reply) {
+            return reply;
+        }
     } catch (error) {
         if (/asynchronous response/.test(errorText(error))) {
             return name.startsWith('_') || name === 'browser_read_page'
@@ -430,7 +476,7 @@ async function tabsTool(
  * @param state - The agent's tabs.
  * @returns Its group's tabs plus its current tab.
  */
-async function agentTabs(state: AgentTabs): Promise<chrome.tabs.Tab[]> {
+export async function agentTabs(state: AgentTabs): Promise<chrome.tabs.Tab[]> {
     const grouped =
         state.groupId != null
             ? await browser.tabs.query({ groupId: state.groupId })
@@ -479,6 +525,58 @@ async function screenshot(
         crop: (measured.crop as Rect | null) ?? null,
     });
     return { ok: true, images: [image] };
+}
+
+// ----------------------------------------------------------
+// Files
+// ----------------------------------------------------------
+
+/**
+ * Download a file for Odoo with the user's cookies for its site: the file an
+ * element links (`ref`), else `url`, else the page open in the agent's tab.
+ *
+ * @param tabId - The agent's tab.
+ * @param args - `ref`, `url`, `name`.
+ * @returns `{file: {name, mimetype, data}}` with base64 data.
+ */
+async function saveFile(
+    tabId: number,
+    args: Record<string, unknown>,
+): Promise<ToolResult> {
+    let source = args.url;
+    if (args.ref != null) {
+        const link = await contentCall(tabId, '_link', { ref: args.ref });
+        if (!link.ok) {
+            return link;
+        }
+        source = link.url;
+    }
+    const url = webUrl(source ?? (await browser.tabs.get(tabId)).url)?.href;
+    if (!url) {
+        return failure('bad_url', 'browser_save_file only saves http and https files.');
+    }
+    const response = await fetch(url, { credentials: 'include' }).catch(() => null);
+    if (!response?.ok) {
+        return failure(
+            'fetch_failed',
+            `The file ${url} could not be downloaded ` +
+                `(${response ? `HTTP ${response.status}` : 'no answer'}). The user may ` +
+                'need to allow MuK AI Browser on all sites in its options, or to open ' +
+                'the file in the tab.',
+        );
+    }
+    const tooLarge = failure('file_too_large', 'The file is larger than 20 MB.');
+    if (Number(response.headers.get('Content-Length')) > MAX_FILE_BYTES) {
+        return tooLarge;
+    }
+    const body = await response.arrayBuffer();
+    if (body.byteLength > MAX_FILE_BYTES) {
+        return tooLarge;
+    }
+    const path = new URL(url).pathname;
+    const segment = decodeName(path.slice(path.lastIndexOf('/') + 1));
+    const file = downloadedFile(response, body, segment || 'download');
+    return { ok: true, file: args.name ? { ...file, name: String(args.name) } : file };
 }
 
 // ----------------------------------------------------------

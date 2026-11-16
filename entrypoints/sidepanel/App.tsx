@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { type Status, frameMessage } from '../../lib/messaging';
-import type { OdooAccess } from '../../lib/odoo';
+import type { OdooAccess, PageCard } from '../../lib/odoo';
 import { PanelClient } from './client';
 
 /** How often the login is checked again while the panel asks to log in. */
@@ -23,10 +23,13 @@ const SLOW_FRAME_MS = 45_000;
  */
 export function App() {
     const [status, setStatus] = useState<Status | null>(null);
+    const [compose, setCompose] = useState<string | null>(null);
     const client = useMemo(() => new PanelClient(), []);
 
     useEffect(() => {
-        client.open((msg) => setStatus(msg.status));
+        client.open((msg) =>
+            msg.type === 'sw/status' ? setStatus(msg.status) : setCompose(msg.text),
+        );
         return () => client.close();
     }, [client]);
 
@@ -42,7 +45,22 @@ export function App() {
                 />
             )}
             {status?.paired && status.odooUrl && (
-                <OdooChat status={status} odooUrl={status.odooUrl} client={client} />
+                <>
+                    {status.card && (
+                        <CardBar
+                            card={status.card}
+                            onOpen={(path) => client.send({ type: 'panel/show', path })}
+                            onPrompt={setCompose}
+                        />
+                    )}
+                    <OdooChat
+                        status={status}
+                        odooUrl={status.odooUrl}
+                        client={client}
+                        compose={compose}
+                        onComposed={() => setCompose(null)}
+                    />
+                </>
             )}
         </div>
     );
@@ -56,19 +74,25 @@ export function App() {
  * until it reports the chat it opens, which this device then attaches to: a
  * new chat when the panel opens, the attached one when the frame reloads.
  * While the chat shows, the worker's polling watches Odoo: unreachable covers
- * the frame, and the frame reloads once Odoo answers again.
+ * the frame, and the frame reloads once Odoo answers again. Once the frame
+ * reported, it gets the composer text.
  *
- * @param props - The status, the Odoo origin and the worker client.
+ * @param props - The status, the Odoo origin, the worker client, and the
+ *     composer text with the handler that clears it once posted.
  * @returns The agent bar and the frame.
  */
 function OdooChat({
     status,
     odooUrl,
     client,
+    compose,
+    onComposed,
 }: {
     status: Status;
     odooUrl: string;
     client: PanelClient;
+    compose: string | null;
+    onComposed: () => void;
 }) {
     const chatUrl = () =>
         `${odooUrl}/ai_browser/chat${status.chatId ? `/${status.chatId}` : ''}`;
@@ -126,6 +150,16 @@ function OdooChat({
         window.addEventListener('message', onMessage);
         return () => window.removeEventListener('message', onMessage);
     }, [client, odooUrl]);
+
+    useEffect(() => {
+        if (reported && compose != null) {
+            frame.current?.contentWindow?.postMessage(
+                { type: 'muk_ai_browser.compose', text: compose },
+                odooUrl,
+            );
+            onComposed();
+        }
+    }, [reported, compose, odooUrl, onComposed]);
 
     useEffect(() => {
         const onVisible = () => {
@@ -253,6 +287,56 @@ function OdooChat({
                 )}
             </div>
         </>
+    );
+}
+
+/**
+ * The company in Odoo behind the site of the agent's tab, with a button to
+ * open it, or the prompts that create one.
+ *
+ * @param props - The card, and the handlers to open a record and to put a
+ *     prompt into the chat.
+ * @returns The card bar.
+ */
+function CardBar({
+    card,
+    onOpen,
+    onPrompt,
+}: {
+    card: PageCard;
+    onOpen: (path: string) => void;
+    onPrompt: (prompt: string) => void;
+}) {
+    const { partner } = card;
+    return (
+        <section className="mk-card" aria-label="In Odoo">
+            <span className="mk-card__avatar" aria-hidden="true">
+                {(partner?.name ?? card.host).charAt(0).toUpperCase()}
+            </span>
+            <span className="mk-card__text">
+                <b>{partner ? partner.name : 'Not in Odoo yet'}</b>
+                <small>{partner ? partner.details.join(' · ') : card.host}</small>
+            </span>
+            {partner && (
+                <button
+                    type="button"
+                    className="mk-btn mk-btn--ghost mk-btn--small"
+                    onClick={() => onOpen(partner.path)}
+                >
+                    Open
+                </button>
+            )}
+            {card.actions.map((action) => (
+                <button
+                    key={action.label}
+                    type="button"
+                    className="mk-btn mk-btn--primary mk-btn--small"
+                    onClick={() => onPrompt(action.prompt)}
+                >
+                    + {action.label}
+                </button>
+            ))}
+        </section>
     );
 }
 

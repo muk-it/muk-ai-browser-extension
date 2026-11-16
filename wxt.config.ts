@@ -29,6 +29,7 @@ export default defineConfig({
         permissions: [
             'activeTab',
             'alarms',
+            'contextMenus',
             'scripting',
             'storage',
             'tabGroups',
@@ -36,6 +37,7 @@ export default defineConfig({
         ],
         optional_host_permissions: ['<all_urls>'],
         action: { default_title: 'Open MuK AI' },
+        commands: { _execute_action: { suggested_key: { default: 'Alt+M' } } },
         content_security_policy: {
             extension_pages:
                 "script-src 'self'; object-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*;",

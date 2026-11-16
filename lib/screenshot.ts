@@ -1,3 +1,5 @@
+import { toBase64 } from './util';
+
 /**
  * Screenshot post-processing in the service worker: draw the numbered
  * set-of-mark boxes onto the captured viewport and crop to an element. Rects
@@ -98,20 +100,5 @@ export async function renderScreenshot(
         ctx.fillText(label, x + pad, Math.max(0, y - height) + pad / 2);
     }
     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
-    return blobToDataUrl(blob);
-}
-
-/**
- * Encode a blob as a data URL without `FileReader`.
- *
- * @param blob - The image blob.
- * @returns The data URL.
- */
-async function blobToDataUrl(blob: Blob): Promise<string> {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    }
-    return `data:${blob.type};base64,${btoa(binary)}`;
+    return `data:${blob.type};base64,${toBase64(await blob.arrayBuffer())}`;
 }
