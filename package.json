@@ -4,6 +4,14 @@
     "description": "Chrome extension for the MuK AI browser agent: page actions for the muk_ai_browser Odoo app, with its chat in the side panel.",
     "license": "Apache-2.0",
     "author": "MuK IT",
+    "homepage": "https://github.com/muk-it/muk-ai-browser-extension#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/muk-it/muk-ai-browser-extension.git"
+    },
+    "bugs": {
+        "url": "https://github.com/muk-it/muk-ai-browser-extension/issues"
+    },
     "private": true,
     "type": "module",
     "scripts": {

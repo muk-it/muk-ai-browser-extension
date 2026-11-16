@@ -20,6 +20,7 @@ When you use it, the extension sends to your Odoo:
 - files the assistant saves from a site to an Odoo record: the extension
   downloads them with your browser's access to that site and sends them only
   to your Odoo;
+- text you select on a page and send to the chat with the right-click menu;
 - a label for the device, such as "Chrome on Windows".
 
 The extension reads a page only when the assistant asks for it, and only in
@@ -38,9 +39,8 @@ privacy policy.
 
 The extension stores the Odoo address, the device key, the id of the open
 chat and your preferences in Chrome's extension storage. Disconnect the
-browser in the extension's options, or in Odoo under MuK AI > Browser >
-Connected Browsers, to remove the key; removing the extension deletes all of
-it.
+browser in the extension's options, or in Odoo under MuK AI > Reports >
+Browsers, to remove the key; removing the extension deletes all of it.
 
 ## Contact
 
