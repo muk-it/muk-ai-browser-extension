@@ -24,8 +24,7 @@ npm test               # unit tests (vitest, jsdom)
 npm run e2e            # Playwright against the build and a fake Odoo
 ```
 
-GitLab runs the first four and the build on every push, GitHub on every pull
-request.
+GitLab runs the first four and the build on every push.
 
 `npm run e2e` loads the build into Chromium with all sites granted. Set
 `HEADED=1` to watch it. `e2e/live.spec.ts` runs against a real Odoo when

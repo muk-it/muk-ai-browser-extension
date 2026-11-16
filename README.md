@@ -138,8 +138,9 @@ app work together.
 
 ## Contributing
 
-Issues and pull requests are welcome; the CI checks every pull request. Report
-security issues privately, as described in [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome; run the checks in
+[Development](docs/DEVELOPMENT.md) first. Report security issues privately, as
+described in [SECURITY.md](SECURITY.md).
 
 ## License
 
