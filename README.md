@@ -1,26 +1,30 @@
-# MuK AI Browser
+<p align="center">
+  <img src="public/icon/128.png" alt="" width="96">
+</p>
 
-<img src="public/icon/128.png" alt="" width="64" align="right">
+<h1 align="center">MuK AI Browser</h1>
 
-[![Chrome Download](https://img.shields.io/badge/Chrome-Download-33627E?style=flat-square&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
-[![Odoo Download](https://img.shields.io/badge/Odoo-Download-714B67?style=flat-square)](https://apps.odoo.com/apps/modules/muk_ai_browser)
-[![YouTube Watch](https://img.shields.io/badge/YouTube-Watch-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/ZcIvjovoFtg)
-[![License Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
-[![Website mukit.at](https://img.shields.io/badge/Website-mukit.at-243742?style=flat-square)](https://www.mukit.at)
+<p align="center">
+  <strong>Your Odoo AI assistant, in the browser next to it.</strong><br>
+  A Chrome extension that lets the MuK AI agent of your Odoo read and act on
+  the web pages you work on.
+</p>
 
-**Your Odoo AI assistant, in the browser next to it.** A Chrome extension that
-lets a MuK AI agent from your Odoo read and act on the web pages you work on:
-read a page, find elements, click, type, fill forms, navigate, compare tabs,
-take screenshots, save files from a site to an Odoo record and put Odoo files
-into a site's upload field. Chrome's side panel shows your Odoo's own MuK AI
-chat; the agent, its approvals, the per-site rules and the audit trail live in
-your Odoo.
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne"><img src="https://img.shields.io/badge/Chrome-Download-33627E?style=flat-square&logo=googlechrome&logoColor=white" alt="Chrome Download"></a>
+  <a href="https://apps.odoo.com/apps/modules/muk_ai_browser"><img src="https://img.shields.io/badge/Odoo-Download-714B67?style=flat-square" alt="Odoo Download"></a>
+  <a href="https://youtu.be/ZcIvjovoFtg"><img src="https://img.shields.io/badge/YouTube-Watch-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube Watch"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square" alt="License Apache 2.0"></a>
+  <a href="https://www.mukit.at"><img src="https://img.shields.io/badge/Website-mukit.at-243742?style=flat-square" alt="Website mukit.at"></a>
+</p>
 
 ![A book shop with the MuK AI chat in the side panel, proposing a plan before it acts](store/2-screenshot-1.png)
 
-It requires the **MuK AI Browser** Odoo app (`muk_ai_browser`, free under
-LGPL-3) on Odoo 16.0 to 20.0. Built with [WXT](https://wxt.dev), TypeScript
-and React.
+Chrome's side panel shows your Odoo's own MuK AI chat. The agent reads the
+page, clicks, types, fills forms, compares tabs and moves files between the
+web and Odoo; its approvals, the per-site rules and the log stay in your Odoo.
+It needs the free **MuK AI Browser** app (`muk_ai_browser`) on Odoo 16.0 to
+20.0.
 
 ## Features
 
@@ -37,105 +41,67 @@ and React.
 - **Files both ways**: saves a PDF or image from a site onto an Odoo record,
   and puts an Odoo attachment into a site's upload field after you approve.
 - **You stay in control**: a plan you approve for tasks of several steps,
-  allow, ask or block per site in Odoo, and form submits, uploads and words
-  like pay or delete always ask first. It never types into password, payment
-  card or one-time code fields.
-
-![The product the agent created, open in Odoo in a tab of the MuK AI group next to the shop](store/2-screenshot-3.png)
+  allow, ask or block per site, and form submits, uploads and words like pay
+  or delete always ask first. It never types into password, payment card or
+  one-time code fields.
 
 ## Install
 
-### From the Chrome Web Store
+**From the Chrome Web Store:** add
+[MuK AI Browser](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
+to Chrome 116 or newer, or to Microsoft Edge. Chrome keeps it up to date.
 
-Add [MuK AI Browser](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
-to Chrome (version 116 or newer) or to Microsoft Edge. Chrome keeps it up to
-date.
-
-### Without the Chrome Web Store
-
-Use this for a browser that cannot reach the store, or to try a version before
-it is published there. Chrome does not update an extension installed this
-way; repeat the steps for a new version.
+**Without the Chrome Web Store**, for a browser that cannot reach the store or
+to try a version before it is published there:
 
 1. Download `muk-ai-browser-extension-<version>-chrome.zip` from the
    [latest release](https://github.com/muk-it/muk-ai-browser-extension/releases/latest)
-   and unzip it into a folder you keep, for example
-   `Documents/muk-ai-browser`. Chrome loads the extension from that folder
-   every time it starts, so do not delete it.
+   and unzip it into a folder you keep. Chrome loads the extension from that
+   folder every time it starts.
 2. Open `chrome://extensions` (in Edge: `edge://extensions`) and turn on
    **Developer mode**.
-3. Click **Load unpacked** and choose the unzipped folder, the one that
-   contains `manifest.json`.
+3. Click **Load unpacked** and choose the unzipped folder, the one with
+   `manifest.json` in it.
 
-![chrome://extensions with Developer mode on and MuK AI Browser loaded](docs/screenshots/load-unpacked.png)
+<img src="docs/screenshots/load-unpacked.png" alt="chrome://extensions with Developer mode on and MuK AI Browser loaded" width="720">
 
-A release build always has the id `ogglimafigjflmiccojhjlljohnoabph`. To
-update it, replace the folder's content with the new release and click the
-reload arrow on the extension's card.
+Chrome does not update an extension installed this way: for a new version,
+replace the folder's content and click the reload arrow on the extension's
+card. A release build always has the id `ogglimafigjflmiccojhjlljohnoabph`.
 
-### From the source
-
-```bash
-git clone https://github.com/muk-it/muk-ai-browser-extension.git
-cd muk-ai-browser-extension
-npm ci
-npm run build
-```
-
-Then load `.output/chrome-mv3` with **Load unpacked** as above.
+**From the source:** `npm ci` and `npm run build`, then load
+`.output/chrome-mv3` with **Load unpacked**.
 
 ## Set up
 
-1. Install the **MuK AI Browser** app (`muk_ai_browser`) in your Odoo; it
-   needs **MuK AI** with an AI provider set up.
-2. The extension's options page opens after the install (later: right-click
-   the toolbar button, **Options**). It walks through three steps:
-    1. **Odoo address**: `https://...` (`http://` only for `localhost`),
-       resolving to one database. Saving asks Chrome for access to that site.
-    2. **Connect**: opens `<odoo>/muk_ai_browser/connect`. Log in there; the
-       extension reads the one-time code, pairs and closes the tab by itself.
-       Elsewhere, paste the code into the side panel.
-    3. **Allow on all sites** (optional): lets the agent act on any page and
-       shows the MuK AI tab on pages, which can be turned off.
+1. Install **MuK AI Browser** in your Odoo; it needs **MuK AI** with an AI
+   provider set up.
+2. The extension's options page opens after the install. Enter your Odoo
+   address, click **Connect** and log in to Odoo in the tab that opens: it
+   pairs the browser and closes itself. **Allow on all sites** lets the agent
+   act on any page.
 3. In Odoo, set what the agent may do on a site without a rule under
    **MuK AI > Settings > Extensions > Browser**, and the site rules under
    **MuK AI > Configuration > Site Permissions**.
 
-<img src="docs/screenshots/options.png" alt="The options page with the Odoo address, Connect and Allow on all sites" width="560">
-
-If the address points to an Odoo without the app, the options page and the
-side panel say so instead of opening a page the Odoo lacks.
+<img src="docs/screenshots/options.png" alt="The options page with the Odoo address, Connect and Allow on all sites" width="480">
 
 ## Use
 
-Open the side panel with the toolbar button, with **Alt+M** (change it at
-`chrome://extensions/shortcuts`), or with the MuK AI tab on the right edge of
-a page (drag it up or down; it hides while the panel is open and never shows
-on your Odoo). The panel shows the MuK AI chat of your Odoo with everything
-installed there: agents, tools, approvals, skills and voice. It shows **Log in
-to Odoo** or **Odoo is not reachable** until Odoo is ready.
+Open the side panel with the toolbar button, with **Alt+M**, or with the MuK
+AI tab on the right edge of a page, and ask. While the agent is not working it
+follows the tab you look at; the bar above the chat names that site, and tabs
+the agent opens join a tab group named "MuK AI".
 
-The chat open in the panel is the one the agent acts for. While it is not
-working, the agent follows the tab you look at; the bar above the chat names
-that site, with a pulsing dot while the agent works, and a click brings the
-tab to the front. Tabs the agent opens join a tab group named "MuK AI".
+Above it, the extension names the company in your Odoo behind the site, with
+**Open** to show it and buttons that put a prompt into the chat. With MuK AI
+CRM the card adds the open opportunities and the last order.
 
-Above that bar the extension shows the company in your Odoo behind the site of
-the agent's tab, with **Open** to show it in the tab group, or buttons such as
-**+ Contact** that put a prompt into the chat. Odoo decides what the card
-says; with MuK AI CRM it adds the open opportunities and the last order.
-
-<img src="docs/screenshots/side-panel.png" alt="The side panel: the company in Odoo behind the site with Open and + Opportunity, above the chat" width="320">
+<img src="docs/screenshots/card.png" alt="The card above the chat: Nordic Parts AB with its open opportunity, Open and + Opportunity" width="360">
 
 Right-click selected text for **MuK AI Browser > Ask MuK AI about this** or
-**Create a contact from this**: the panel opens with the text quoted in the
-chat's composer.
-
-**Files.** `browser_save_file` downloads a file from a site (a link, an image,
-or the PDF open in the tab) with your cookies for that site and attaches it
-to an Odoo record. `browser_upload_file` puts an Odoo attachment into a site's
-file field. Saving follows the site's rule like any other action; every
-upload asks you first. Files larger than 20 MB are refused.
+**Create a contact from this**. Files saved from a site go onto an Odoo record;
+an Odoo file goes into a site's upload field only after you approve it.
 
 ## Permissions
 
@@ -151,23 +117,12 @@ upload asks you first. Files larger than 20 MB are refused.
 | Your Odoo's address (asked on save) | Talks to your Odoo, checks the login and reads the pairing code on its connect page.           |
 | All sites (optional)                | Lets the agent read and act on any page, and shows the MuK AI tab. Otherwise only `activeTab`. |
 
-**Trusted input** (real input events through the debugger protocol) needs the
-`debugger` permission, which Chrome does not allow as optional. The published
-builds do not request it and answer `trusted: true` calls with
-`trusted_input_unavailable`; add `debugger` to `permissions` in
-`wxt.config.ts` for a build of your own that has it.
-
 ## Privacy
 
-The extension talks only to the Odoo you configured. It sends the chat id, the
-origin of the agent's tabs, the device label (e.g. `Chrome on Windows`), the
-address of the agent's page for the card, and the results of the actions the
-agent asks for (page outline, screenshots, URL and title, files it saves). It
-reads pages only when the agent asks, only in the agent's tabs, and never
-types into password, payment card or one-time code fields. It puts a file into
-a site's upload field only after you approved it in Odoo. Your Odoo decides
-per site whether the agent may act, must ask, or is blocked. The full policy
-is in [store/PRIVACY.md](store/PRIVACY.md).
+The extension talks only to the Odoo you configured, contains no analytics,
+reads pages only when the agent asks, and never types into password, payment
+card or one-time code fields. What it sends to your Odoo is listed in the
+[privacy policy](store/PRIVACY.md).
 
 ## Develop
 
@@ -176,17 +131,15 @@ npm ci && npm run build   # .output/chrome-mv3
 npm test                  # unit tests
 ```
 
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the checks, the end-to-end
-tests, the layout, the code style and the release steps;
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the extension and
-the Odoo app work together.
+[Development](docs/DEVELOPMENT.md) has the checks, the end-to-end tests, the
+layout, the code style and the release steps;
+[Architecture](docs/ARCHITECTURE.md) explains how the extension and the Odoo
+app work together.
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `npm test`, `npm run lint`,
-`npm run format:check` and `npx tsc --noEmit` before you open a pull request;
-the CI runs the same checks. Report security issues privately, as described in
-[SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome; the CI checks every pull request. Report
+security issues privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

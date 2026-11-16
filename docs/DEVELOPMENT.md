@@ -24,12 +24,22 @@ npm test               # unit tests (vitest, jsdom)
 npm run e2e            # Playwright against the build and a fake Odoo
 ```
 
-The CI runs the first four and the build on every push and pull request.
+GitLab runs the first four and the build on every push, GitHub on every pull
+request.
 
 `npm run e2e` loads the build into Chromium with all sites granted. Set
 `HEADED=1` to watch it. `e2e/live.spec.ts` runs against a real Odoo when
 `ODOO_URL` (one database) and `PAIR_CODE` (a fresh code from
 `<odoo>/muk_ai_browser/connect`) are set.
+
+## Trusted input
+
+Tool calls with `trusted: true` send real input events through the Chrome
+debugger protocol, for pages that ignore synthetic events. That needs the
+`debugger` permission, which Chrome does not allow as optional, so the
+published builds do not request it and answer such calls with
+`trusted_input_unavailable`. Add `debugger` to `permissions` in
+`wxt.config.ts` for a build of your own that has it.
 
 ## Layout
 
