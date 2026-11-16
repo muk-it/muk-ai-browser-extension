@@ -41,10 +41,7 @@ and React.
   like pay or delete always ask first. It never types into password, payment
   card or one-time code fields.
 
-<p>
-  <img src="docs/screenshots/side-panel.png" alt="The side panel: the company in Odoo behind the site with Open and + Opportunity, above the chat" width="300">
-  <img src="store/2-screenshot-3.png" alt="The product the agent created, open in Odoo in a tab of the MuK AI group next to the shop" width="520">
-</p>
+![The product the agent created, open in Odoo in a tab of the MuK AI group next to the shop](store/2-screenshot-3.png)
 
 ## Install
 
@@ -127,6 +124,8 @@ Above that bar the extension shows the company in your Odoo behind the site of
 the agent's tab, with **Open** to show it in the tab group, or buttons such as
 **+ Contact** that put a prompt into the chat. Odoo decides what the card
 says; with MuK AI CRM it adds the open opportunities and the last order.
+
+<img src="docs/screenshots/side-panel.png" alt="The side panel: the company in Odoo behind the site with Open and + Opportunity, above the chat" width="320">
 
 Right-click selected text for **MuK AI Browser > Ask MuK AI about this** or
 **Create a contact from this**: the panel opens with the text quoted in the
