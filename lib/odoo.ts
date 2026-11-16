@@ -4,17 +4,33 @@
  * the device key as a bearer token.
  */
 
-/** Failed request; `status` drives the 401 / 404 / 409 handling. */
+/** Readable messages of the error codes the extension shows. */
+const MESSAGES: Record<string, string> = {
+    network: 'Odoo did not answer.',
+    app_missing:
+        'The MuK AI Browser app is not installed in this Odoo. Install it from ' +
+        'Apps, then try again.',
+    bad_response: 'Odoo sent an answer the extension does not understand.',
+    not_paired: 'This browser is not connected to Odoo.',
+    invalid_or_expired_code:
+        'The pairing code is invalid or expired. Open the connect page again.',
+    ai_session_not_found: 'The chat no longer exists in Odoo. Start a new one.',
+};
+
+/** Failed request; `status` and `code` drive the handling, the message is shown. */
 export class OdooError extends Error {
     /**
-     * @param status - HTTP status, `0` for a network failure.
-     * @param message - Server message or a short description.
+     * @param status - HTTP status, `0` when Odoo did not answer.
+     * @param code - The server's `error` code, or the extension's own.
      */
     constructor(
         public readonly status: number,
-        message: string,
+        public readonly code = '',
     ) {
-        super(message);
+        super(
+            MESSAGES[code] ??
+                `Odoo answered with HTTP ${status}${code ? ` (${code})` : ''}.`,
+        );
         this.name = 'OdooError';
     }
 }
@@ -67,13 +83,14 @@ export interface PollResponse {
 }
 
 /**
- * Perform a JSON request and decode the response.
+ * Perform a JSON request and decode the response. A 404 without an error code
+ * comes from an Odoo that lacks the route, so without the app.
  *
  * @param url - Absolute URL.
  * @param apiKey - Bearer key, or `null` for the unauthenticated `/pair`.
  * @param body - JSON body for a POST; a GET is sent when omitted.
  * @returns The decoded JSON (`{}` for an empty body).
- * @throws {OdooError} On a network failure or a non-2xx status.
+ * @throws {OdooError} When Odoo does not answer, fails, or answers no JSON.
  */
 async function request<T>(
     url: string,
@@ -88,6 +105,7 @@ async function request<T>(
         headers['Content-Type'] = 'application/json';
     }
     let response: Response;
+    let text: string;
     try {
         response = await fetch(url, {
             method: body ? 'POST' : 'GET',
@@ -95,34 +113,43 @@ async function request<T>(
             body: body ? JSON.stringify(body) : undefined,
             credentials: 'omit',
         });
-    } catch (error) {
-        throw new OdooError(0, String(error));
+        text = await response.text();
+    } catch {
+        throw new OdooError(0, 'network');
     }
-    const text = await response.text();
+    const data = parseJson(text);
     if (!response.ok) {
-        throw new OdooError(response.status, errorMessage(text, response.status));
+        const code = (data as { error?: unknown } | null)?.error;
+        throw new OdooError(
+            response.status,
+            typeof code === 'string'
+                ? code
+                : response.status === 404
+                  ? 'app_missing'
+                  : '',
+        );
     }
-    return (text ? JSON.parse(text) : {}) as T;
+    if (data === undefined) {
+        throw new OdooError(response.status, 'bad_response');
+    }
+    return data as T;
 }
 
 /**
- * Extract a readable message from an error body.
+ * Decode a response body.
  *
- * @param text - The raw response body.
- * @param status - The HTTP status.
- * @returns The server's `error`/`message`, or a short fallback.
+ * @param text - The raw body.
+ * @returns The JSON value, `{}` for an empty body, `undefined` for no JSON.
  */
-function errorMessage(text: string, status: number): string {
-    try {
-        const body = JSON.parse(text) as { error?: unknown; message?: unknown };
-        const message = body.message ?? body.error;
-        if (typeof message === 'string' && message) {
-            return message;
-        }
-    } catch {
-        /* not JSON */
+function parseJson(text: string): unknown {
+    if (!text) {
+        return {};
     }
-    return `HTTP ${status}`;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -239,15 +266,27 @@ export async function postResult(
     }
 }
 
+/** What a check of the configured Odoo found. */
+export type OdooAccess = 'in' | 'out' | 'missing' | 'unreachable';
+
 /**
- * Ask the Odoo web client whether this browser has a logged-in session. The
- * request carries the Odoo session cookie, unlike the device-key routes.
+ * Check the configured Odoo before showing one of its pages: whether it has
+ * the app, which redirects its chat route, and whether this browser is logged
+ * in to it. Both requests read only; the login check carries the Odoo session
+ * cookie, unlike the device-key routes.
  *
  * @param odooUrl - The configured Odoo origin.
- * @returns Whether a user is logged in, or `null` when Odoo did not answer.
+ * @returns Logged in, logged out, without the app, or not answering.
  */
-export async function loggedIn(odooUrl: string): Promise<boolean | null> {
+export async function checkOdoo(odooUrl: string): Promise<OdooAccess> {
     try {
+        const app = await fetch(`${odooUrl}/ai_browser/chat`, {
+            credentials: 'omit',
+            redirect: 'manual',
+        });
+        if (app.status === 404) {
+            return 'missing';
+        }
         const response = await fetch(`${odooUrl}/web/session/get_session_info`, {
             method: 'POST',
             credentials: 'include',
@@ -255,11 +294,11 @@ export async function loggedIn(odooUrl: string): Promise<boolean | null> {
             body: '{"jsonrpc":"2.0","method":"call","params":{}}',
         });
         if (!response.ok) {
-            return null;
+            return 'unreachable';
         }
         const body = (await response.json()) as { result?: { uid?: unknown } };
-        return Boolean(body.result?.uid);
+        return body.result?.uid ? 'in' : 'out';
     } catch {
-        return null;
+        return 'unreachable';
     }
 }

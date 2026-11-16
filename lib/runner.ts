@@ -131,7 +131,9 @@ async function dispatch(
 
 /**
  * Run a tool in a tab's content script, injecting it when no tool answers
- * (the tab may hold other extension listeners, such as the launcher).
+ * (the tab may hold other extension listeners, such as the launcher). A page
+ * that unloads while an agent tool runs was navigated by it: the tool is not
+ * run again, and its result is the loaded page.
  *
  * @param tabId - The tab.
  * @param name - Tool name.
@@ -144,11 +146,14 @@ async function contentCall(
     args: Record<string, unknown>,
 ): Promise<ToolResult> {
     const message = { type: 'content/tool', name, arguments: args };
-    const reply = (await browser.tabs
-        .sendMessage(tabId, message)
-        .catch(() => undefined)) as ToolResult | undefined;
-    if (reply) {
-        return reply;
+    try {
+        return (await browser.tabs.sendMessage(tabId, message)) as ToolResult;
+    } catch (error) {
+        if (/asynchronous response/.test(errorText(error))) {
+            return name.startsWith('_') || name === 'browser_read_page'
+                ? failure('page_changed', 'The page changed meanwhile: read it again.')
+                : loaded(tabId);
+        }
     }
     try {
         await browser.scripting.executeScript({
@@ -378,7 +383,10 @@ async function tabsTool(
     } else if (action === 'select' || action === 'close') {
         const target = tabId ?? state.tabId;
         const tab = allowed.find((candidate) => candidate.id === target);
-        if (!tab || target == null) {
+        if (target == null) {
+            return failure('no_tab', 'The agent has no tab: give a tab_id.');
+        }
+        if (!tab) {
             return failure(
                 'unknown_tab',
                 `Tab ${target} is not one of the agent's tabs.`,
@@ -497,17 +505,13 @@ async function trusted(
                 'Retry without trusted, or ask the user to do this step.',
         );
     }
-    let point: ToolResult | null = null;
-    if (name !== 'browser_press_key' || args.ref) {
-        point = await contentCall(tabId, '_locate', {
-            ref: args.ref,
-            focus: name !== 'browser_click',
-            select: name === 'browser_type',
-            editable: name === 'browser_type',
-        });
-        if (!point.ok) {
-            return point;
-        }
+    const point = await contentCall(tabId, '_locate', {
+        ref: args.ref,
+        keyboard: name !== 'browser_click',
+        select: name === 'browser_type',
+    });
+    if (!point.ok) {
+        return point;
     }
     await withDebugger(tabId, async (send) => {
         if (name === 'browser_click') {
@@ -515,8 +519,8 @@ async function trusted(
                 Array.isArray(args.modifiers) ? args.modifiers : []
             ) as Modifier[];
             const events = clickEvents(
-                Number(point?.x),
-                Number(point?.y),
+                Number(point.x),
+                Number(point.y),
                 (args.button as MouseButton) ?? 'left',
                 Boolean(args.double),
                 modifiers,

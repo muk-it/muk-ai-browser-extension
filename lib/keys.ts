@@ -108,12 +108,13 @@ export function parseKey(chord: string): KeyChord {
         const [code, keyCode, text] = named;
         return { key, code, keyCode, modifiers, text: shortcut ? '' : text };
     }
-    const char = key.length === 1 ? key : '';
+    const char =
+        key.length === 1 ? (modifiers.includes('Shift') ? key.toUpperCase() : key) : '';
     const upper = char.toUpperCase();
     const isLetter = /^[A-Z]$/.test(upper);
     const isDigit = /^[0-9]$/.test(char);
     return {
-        key,
+        key: char || key,
         code: isLetter ? `Key${upper}` : isDigit ? `Digit${char}` : key,
         keyCode: char ? upper.charCodeAt(0) : 0,
         modifiers,

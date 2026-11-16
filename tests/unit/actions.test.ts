@@ -40,7 +40,7 @@ async function refs(html: string): Promise<string[]> {
 beforeEach(() => {
     __resetPerceptionState();
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(RECT);
-    HTMLFormElement.prototype.requestSubmit = vi.fn();
+    vi.spyOn(HTMLFormElement.prototype, 'requestSubmit').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -97,15 +97,34 @@ describe('performAction', () => {
     });
 
     it.each([
-        '<input type="password">',
-        '<input autocomplete="billing cc-number">',
-        '<input autocomplete="one-time-code">',
-        '<input autocomplete="new-password">',
-    ])('refuses to type into a sensitive field: %s', async (field) => {
-        const [ref] = await refs(`<label>Field ${field}</label>`);
-        const result = await performAction('browser_type', { ref, text: 'x' }, CTX);
-        expect(result).toMatchObject({ ok: false, error: 'sensitive_field' });
-        expect(result.ok || result.message).toContain('ask the user');
+        ['browser_type', '<input type="password">', 'sensitive_field'],
+        ['browser_type', '<input name="password">', 'sensitive_field'],
+        ['browser_type', '<input autocomplete="cc-number">', 'sensitive_field'],
+        ['browser_type', '<input autocomplete="one-time-code">', 'sensitive_field'],
+        ['browser_type', '<input autocomplete="new-password">', 'sensitive_field'],
+        ['browser_fill_form', '<input autocomplete="cc-csc">', 'sensitive_field'],
+        ['browser_fill_form', '<input type="file">', 'file_upload'],
+        [
+            'browser_select_option',
+            '<select autocomplete="cc-exp-month"><option>01</option></select>',
+            'sensitive_field',
+        ],
+    ])('refuses %s into %s', async (tool, field, error) => {
+        const [name, ref] = await refs(
+            `<input aria-label="Name"><label>F ${field}</label>`,
+        );
+        const result = await performAction(
+            tool,
+            {
+                ref,
+                text: '01',
+                values: ['01'],
+                fields: [name, ref].map((each) => ({ ref: each, value: '01' })),
+            },
+            CTX,
+        );
+        expect(result).toMatchObject({ ok: false, error });
+        expect(result.ok || result.message).toMatch(/ask the user/);
         expect((document.querySelector('input') as HTMLInputElement).value).toBe('');
     });
 
@@ -134,29 +153,6 @@ describe('performAction', () => {
                 .checked,
         ).toBe(true);
         expect((document.querySelector('select') as HTMLSelectElement).value).toBe('l');
-    });
-
-    it('fills nothing when one field of the batch is sensitive', async () => {
-        const both = await refs(
-            '<input aria-label="Name"><input aria-label="Card" autocomplete="cc-number">',
-        );
-        const result = await performAction(
-            'browser_fill_form',
-            { fields: both.map((ref) => ({ ref, value: '4111' })) },
-            CTX,
-        );
-        expect(result).toMatchObject({ ok: false, error: 'sensitive_field' });
-        expect((document.querySelector('input') as HTMLInputElement).value).toBe('');
-    });
-
-    it('refuses file uploads', async () => {
-        const [ref] = await refs('<input type="file" aria-label="Upload">');
-        const result = await performAction(
-            'browser_fill_form',
-            { fields: [{ ref, value: 'x' }] },
-            CTX,
-        );
-        expect(result).toMatchObject({ ok: false, error: 'file_upload' });
     });
 
     it('finds snapshot lines containing every query word, across the whole page', async () => {
@@ -189,32 +185,42 @@ describe('performAction', () => {
         });
     });
 
-    it('reports a stale ref and an unknown tool', async () => {
-        expect(
-            await performAction('browser_click', { ref: 'e999' }, CTX),
-        ).toMatchObject({
+    it.each([
+        ['browser_click', { ref: 'e999' }, 'stale_ref'],
+        ['browser_teleport', {}, 'unknown_tool'],
+        ['browser_press_key', { key: '' }, 'bad_arguments'],
+        ['browser_wait_for', {}, 'bad_arguments'],
+    ])('refuses %s %o', async (tool, args, error) => {
+        expect(await performAction(tool, args, CTX)).toMatchObject({
             ok: false,
-            error: 'stale_ref',
-        });
-        expect(await performAction('browser_teleport', {}, CTX)).toMatchObject({
-            ok: false,
-            error: 'unknown_tool',
+            error,
         });
     });
 
-    it('locates an element for trusted input, refusing sensitive fields', async () => {
-        const [ref] = await refs('<input aria-label="Name">');
-        expect(
-            await performAction('_locate', { ref, editable: true }, CTX),
-        ).toMatchObject({ ok: true, x: 50, y: 10 });
-        const [secret] = await refs(
+    it.each([
+        ['<input aria-label="Name">', { keyboard: true }, { ok: true, x: 50, y: 10 }],
+        ['<input aria-label="Pw" type="password">', {}, { ok: true, x: 50, y: 10 }],
+        [
             '<input aria-label="Pw" autocomplete="current-password">',
+            { keyboard: true },
+            { ok: false, error: 'sensitive_field' },
+        ],
+        [
+            '<input aria-label="Pw" name="user_pwd">',
+            { keyboard: true, focusOnly: true },
+            { ok: false, error: 'sensitive_field' },
+        ],
+    ])('locates %s for trusted input', async (html, args, expected) => {
+        const [ref] = await refs(html);
+        const { focusOnly, ...rest } = args as { focusOnly?: boolean };
+        if (focusOnly) {
+            (document.querySelector('input') as HTMLInputElement).focus();
+        }
+        const located = await performAction(
+            '_locate',
+            { ...rest, ref: focusOnly ? undefined : ref },
+            CTX,
         );
-        expect(
-            await performAction('_locate', { ref: secret, editable: true }, CTX),
-        ).toMatchObject({
-            ok: false,
-            error: 'sensitive_field',
-        });
+        expect(located).toMatchObject(expected);
     });
 });

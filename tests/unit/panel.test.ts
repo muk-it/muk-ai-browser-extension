@@ -2,14 +2,15 @@ import { act, createElement } from 'react';
 import { type Root, createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PanelToSwMessage, Status } from '../../lib/messaging';
+import type { OdooAccess } from '../../lib/odoo';
 
 const port = vi.hoisted(() => ({
     sent: [] as unknown[],
     listener: null as ((message: unknown) => void) | null,
 }));
 
-/** What the worker answers to `panel/logged-in`, in order (last one repeats). */
-const login = vi.hoisted(() => ({ answers: [] as (boolean | null)[] }));
+/** What the worker answers to `panel/check`, in order (last one repeats). */
+const check = vi.hoisted(() => ({ answers: [] as string[] }));
 
 vi.mock('wxt/browser', () => ({
     browser: {
@@ -23,8 +24,14 @@ vi.mock('wxt/browser', () => ({
                 postMessage: (message: unknown) => port.sent.push(message),
                 disconnect: () => undefined,
             }),
-            sendMessage: async () =>
-                login.answers.length > 1 ? login.answers.shift() : login.answers[0],
+            sendMessage: async (message: { type: string }) => {
+                if (message.type !== 'panel/check') {
+                    throw new Error(`unexpected ${message.type}`);
+                }
+                return check.answers.length > 1
+                    ? check.answers.shift()
+                    : check.answers[0];
+            },
         },
         windows: { getCurrent: async () => ({ id: 1 }) },
         tabs: { create: vi.fn() },
@@ -84,12 +91,12 @@ function forwarded(): PanelToSwMessage[] {
 }
 
 /**
- * Render the panel paired, with the worker answering the login check.
+ * Render the panel paired, with the worker answering the Odoo check.
  *
- * @param answers - The login answers, in order.
+ * @param answers - The check answers, in order.
  */
-async function open(...answers: (boolean | null)[]): Promise<void> {
-    login.answers = answers;
+async function open(...answers: OdooAccess[]): Promise<void> {
+    check.answers = answers;
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -113,7 +120,7 @@ afterEach(() => {
 
 describe('side panel', () => {
     it('connects, waits for the login in the tab, then shows the chat', async () => {
-        await open(true);
+        await open('in');
         const show = (status: Partial<Status>) =>
             act(() =>
                 port.listener?.({
@@ -141,7 +148,7 @@ describe('side panel', () => {
     });
 
     it('opens a new chat with the agent bar above it', async () => {
-        await open(true);
+        await open('in');
         expect(container.querySelector('iframe')?.getAttribute('src')).toBe(
             `${ODOO}/ai_browser/chat`,
         );
@@ -163,7 +170,7 @@ describe('side panel', () => {
     });
 
     it('forwards only what the Odoo frame reports', async () => {
-        await open(true);
+        await open('in');
         const frame = container.querySelector('iframe')?.contentWindow ?? null;
         const show = { type: 'muk_ai_browser.show', path: '/odoo/product.template/7' };
         expect(frame).not.toBeNull();
@@ -181,7 +188,7 @@ describe('side panel', () => {
     });
 
     it('shows a loading state until the chat opens, and a retry when slow', async () => {
-        await open(true);
+        await open('in');
         expect(container.textContent).toContain('Opening your chat...');
         await act(() => vi.advanceTimersByTimeAsync(44_999));
         expect(container.textContent).not.toContain('Still loading');
@@ -193,12 +200,13 @@ describe('side panel', () => {
     });
 
     it.each([
-        [false, 'Log in to Odoo', [3_000, 3_000]],
-        [null, 'Odoo is not reachable', [2_000, 4_000]],
-    ])(
+        ['out', 'Log in to Odoo', [3_000, 3_000]],
+        ['unreachable', 'Odoo is not reachable', [2_000, 4_000]],
+        ['missing', 'The app is missing in Odoo', [2_000, 4_000]],
+    ] as const)(
         'answers %s with "%s" at once and opens the chat once Odoo has a user',
         async (answer, notice, waits) => {
-            await open(answer, answer, true);
+            await open(answer, answer, 'in');
             expect(container.textContent).toContain(notice);
             expect(container.textContent).not.toContain('Opening your chat');
             expect(container.querySelector('iframe')).toBeNull();
@@ -213,7 +221,7 @@ describe('side panel', () => {
     );
 
     it('covers the chat while Odoo is unreachable and reloads it after', async () => {
-        await open(true);
+        await open('in');
         const first = container.querySelector('iframe');
         post(ODOO, first?.contentWindow ?? null);
         const status = (link: Status['link']) =>
@@ -233,7 +241,7 @@ describe('side panel', () => {
     });
 
     it('asks the worker to poll at once when the panel shows again', async () => {
-        await open(true);
+        await open('in');
         port.sent = [];
         document.dispatchEvent(new Event('visibilitychange'));
         await act(() => vi.advanceTimersByTimeAsync(0));
@@ -241,7 +249,7 @@ describe('side panel', () => {
     });
 
     it('checks Odoo again when the loaded frame stays silent', async () => {
-        await open(true, null);
+        await open('in', 'unreachable');
         act(() => {
             container.querySelector('iframe')?.dispatchEvent(new Event('load'));
         });

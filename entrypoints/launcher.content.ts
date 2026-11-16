@@ -95,7 +95,9 @@ export default defineContentScript({
         const state = {
             show: await showLauncherItem.getValue(),
             panelOpen: Boolean(
-                await browser.runtime.sendMessage({ type: 'launcher/hello' }),
+                await browser.runtime
+                    .sendMessage({ type: 'launcher/hello' })
+                    .catch(() => false),
             ),
         };
         const render = () => {

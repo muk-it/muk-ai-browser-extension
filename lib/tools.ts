@@ -57,7 +57,7 @@ export function routeTool(name: string, args: Record<string, unknown>): Route | 
  * Refuse a page-changing call on an origin outside an approved plan. The
  * server gated the call on the origin it last saw; this catches a tab that
  * moved to another site since (a redirect, or the user navigating).
- * Navigation is exempt: the server asks before leaving the plan.
+ * Navigation is not a mutating tool: the server asks before leaving the plan.
  *
  * @param name - Tool name.
  * @param origin - Current origin of the agent's tab.
@@ -72,8 +72,6 @@ export function scopeRefusal(
     if (
         planOrigins.length === 0 ||
         !MUTATING_TOOLS.has(name) ||
-        name === 'browser_navigate' ||
-        name === 'browser_navigate_back' ||
         originInScope(origin, planOrigins)
     ) {
         return null;

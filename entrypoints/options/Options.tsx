@@ -134,9 +134,9 @@ export function Options() {
                         type="button"
                         disabled={!status.odooUrl}
                         onClick={() =>
-                            void browser.runtime.sendMessage({
-                                type: 'options/connect',
-                            })
+                            void browser.runtime
+                                .sendMessage({ type: 'options/connect' })
+                                .then(refresh)
                         }
                     >
                         Connect

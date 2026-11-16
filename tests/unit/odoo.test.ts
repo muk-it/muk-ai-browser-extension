@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     OdooError,
+    checkOdoo,
     isUnreachable,
-    loggedIn,
     openSession,
     pair,
     poll,
@@ -23,14 +23,15 @@ let calls: { url: string; init: RequestInit }[];
  * Stub `fetch` with one response for every call.
  *
  * @param status - HTTP status.
- * @param body - Response body.
+ * @param body - Response body, sent as JSON unless it is a string.
  */
 function respond(status: number, body: unknown = {}): void {
     vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string, init: RequestInit) => {
             calls.push({ url, init });
-            return new Response(JSON.stringify(body), { status });
+            const text = typeof body === 'string' ? body : JSON.stringify(body);
+            return new Response(text, { status });
         }),
     );
 }
@@ -107,19 +108,25 @@ describe('odoo client', () => {
         ).resolves.toBeUndefined();
     });
 
-    it('raises the status and the server message of a failed request', async () => {
-        respond(401, { error: 'invalid_key' });
-        await expect(poll(TARGET, '')).rejects.toEqual(
-            new OdooError(401, 'invalid_key'),
-        );
-        respond(404, '');
-        await expect(poll(TARGET, '')).rejects.toMatchObject({ status: 404 });
-        respond(500, { error: 'x' });
-        await expect(
-            postResult(TARGET, 'c1', null, { ok: true }),
-        ).rejects.toMatchObject({
-            status: 500,
-        });
+    it.each([
+        [401, { error: 'invalid_key' }, 'invalid_key', 'HTTP 401 (invalid_key)'],
+        [404, { error: 'browser_session_not_found' }, 'browser_session_not_found', ''],
+        [404, '<h1>Not Found</h1>', 'app_missing', 'app is not installed'],
+        [500, '<h1>Internal Server Error</h1>', '', 'HTTP 500.'],
+        [200, '<html>Login</html>', 'bad_response', 'does not understand'],
+    ])('reads a %s answer as an error', async (code, body, errorCode, message) => {
+        respond(code, body);
+        const error = await poll(TARGET, '').catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(OdooError);
+        expect(error).toMatchObject({ status: code, code: errorCode });
+        expect((error as Error).message).toContain(message);
+    });
+
+    it('reads a failed connection as Odoo not answering', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
+        const error = await poll(TARGET, '').catch((caught: unknown) => caught);
+        expect(error).toMatchObject({ status: 0, code: 'network' });
+        expect(isUnreachable(error)).toBe(true);
     });
 
     it('refuses a session call while unpaired, without a request', async () => {
@@ -130,34 +137,60 @@ describe('odoo client', () => {
     });
 
     it.each([
-        [200, { result: { uid: 2 } }, true],
-        [200, { error: { code: 100, message: 'Session expired' } }, false],
-        [502, {}, null],
+        [
+            { status: 303, body: '' },
+            { status: 200, body: { result: { uid: 2 } } },
+            'in',
+        ],
+        [
+            { status: 303, body: '' },
+            { status: 200, body: { error: { code: 100 } } },
+            'out',
+        ],
+        [{ status: 404, body: '' }, null, 'missing'],
+        [{ status: 502, body: '' }, { status: 502, body: {} }, 'unreachable'],
     ])(
-        'checks the Odoo login with the session cookie (%s)',
-        async (code, body, expected) => {
-            respond(code, body);
-            expect(await loggedIn('https://odoo.example')).toBe(expected);
-            expect(calls[0].url).toBe(
-                'https://odoo.example/web/session/get_session_info',
+        'checks the app and the login of Odoo (%o, %o)',
+        async (app, session, expected) => {
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async (url: string, init: RequestInit) => {
+                    calls.push({ url, init });
+                    const answer = url.endsWith('/ai_browser/chat') ? app : session;
+                    return new Response(
+                        JSON.stringify(answer?.body ?? ''),
+                        answer ?? {},
+                    );
+                }),
             );
-            expect(calls[0].init).toMatchObject({
-                method: 'POST',
-                credentials: 'include',
+            expect(await checkOdoo('https://odoo.example')).toBe(expected);
+            expect(calls[0]).toMatchObject({
+                url: 'https://odoo.example/ai_browser/chat',
+                init: { credentials: 'omit', redirect: 'manual' },
             });
+            expect(calls.slice(1)).toEqual(
+                session
+                    ? [
+                          {
+                              url: 'https://odoo.example/web/session/get_session_info',
+                              init: expect.objectContaining({ credentials: 'include' }),
+                          },
+                      ]
+                    : [],
+            );
         },
     );
 
     it('treats an unreachable Odoo as unknown, not logged out', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
-        expect(await loggedIn('https://odoo.example')).toBeNull();
+        expect(await checkOdoo('https://odoo.example')).toBe('unreachable');
     });
 
     it.each([
-        [new OdooError(0, 'Failed to fetch'), true],
-        [new OdooError(502, 'Bad Gateway'), true],
-        [new OdooError(504, 'Gateway Timeout'), true],
-        [new OdooError(500, 'Server Error'), false],
+        [new OdooError(0, 'network'), true],
+        [new OdooError(502), true],
+        [new OdooError(504), true],
+        [new OdooError(500), false],
         [new OdooError(401, 'invalid_key'), false],
         [new Error('other'), false],
     ])('tells whether %s means Odoo is unreachable', (error, expected) => {

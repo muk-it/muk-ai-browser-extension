@@ -55,8 +55,8 @@ export type SwToPanelMessage = { type: 'sw/status'; status: Status };
 
 /** One-off runtime messages. */
 export type RuntimeMessage =
-    /** The side panel asks whether a user is logged in to Odoo (`boolean | null`). */
-    | { type: 'panel/logged-in' }
+    /** The side panel asks whether Odoo has the app and a logged-in user (`OdooAccess`). */
+    | { type: 'panel/check' }
     /** The launcher was clicked: open the side panel for its tab. */
     | { type: 'launcher/open-panel' }
     /** The launcher loaded and asks whether the side panel is open (`boolean`). */

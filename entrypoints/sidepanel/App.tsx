@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { type Status, frameMessage } from '../../lib/messaging';
+import type { OdooAccess } from '../../lib/odoo';
 import { PanelClient } from './client';
 
 /** How often the login is checked again while the panel asks to log in. */
 const LOGIN_RECHECK_MS = 3_000;
 
-/** First and longest wait before checking an unreachable Odoo again. */
+/** First and longest wait before checking an unreachable Odoo, or one without the app, again. */
 const UNREACHABLE_RECHECK_MS = [2_000, 30_000];
 
 /** How long a loaded frame may stay silent before the Odoo is checked again. */
@@ -14,9 +15,6 @@ const SILENT_FRAME_MS = 3_000;
 
 /** How long the chat may take to open before the panel offers a retry. */
 const SLOW_FRAME_MS = 45_000;
-
-/** What the service worker's login check found. */
-type Access = 'unknown' | 'in' | 'out' | 'unreachable';
 
 /**
  * Side panel. Before pairing it offers the options page, Connect and a field
@@ -53,8 +51,8 @@ export function App() {
 /**
  * The paired Odoo's chat in a frame. The service worker checks the Odoo
  * first, and again when a loaded frame stays silent: logged out shows a login
- * card, unreachable a notice; both keep checking and open the chat as soon as
- * Odoo answers with a user. Otherwise the frame loads behind a loading state
+ * card, unreachable or without the app a notice; all keep checking and open
+ * the chat as soon as Odoo answers with a user. Otherwise the frame loads behind a loading state
  * until it reports the chat it opens, which this device then attaches to: a
  * new chat when the panel opens, the attached one when the frame reloads.
  * While the chat shows, the worker's polling watches Odoo: unreachable covers
@@ -77,7 +75,7 @@ function OdooChat({
     const [src, setSrc] = useState(`${odooUrl}/ai_browser/chat`);
     const [attempt, setAttempt] = useState(0);
     const [loads, setLoads] = useState(0);
-    const [access, setAccess] = useState<Access>('unknown');
+    const [access, setAccess] = useState<OdooAccess | 'unknown'>('unknown');
     const [reported, setReported] = useState(false);
     const [slow, setSlow] = useState(false);
     const frame = useRef<HTMLIFrameElement>(null);
@@ -92,18 +90,17 @@ function OdooChat({
         let cancelled = false;
         let backoff = UNREACHABLE_RECHECK_MS[0];
         const check = async () => {
-            const answer = (await browser.runtime.sendMessage({
-                type: 'panel/logged-in',
-            })) as boolean | null;
+            const answer = (await browser.runtime
+                .sendMessage({ type: 'panel/check' })
+                .catch(() => 'unreachable')) as OdooAccess;
             if (cancelled) {
                 return;
             }
-            if (answer === true) {
-                setAccess('in');
+            setAccess(answer);
+            if (answer === 'in') {
                 return;
             }
-            setAccess(answer === false ? 'out' : 'unreachable');
-            const delay = answer === false ? LOGIN_RECHECK_MS : backoff;
+            const delay = answer === 'out' ? LOGIN_RECHECK_MS : backoff;
             backoff = Math.min(backoff * 2, UNREACHABLE_RECHECK_MS[1]);
             timer = setTimeout(() => void check(), delay);
         };
@@ -140,15 +137,14 @@ function OdooChat({
         return () => document.removeEventListener('visibilitychange', onVisible);
     }, [client]);
 
-    const blocked = !reported && (access === 'out' || access === 'unreachable');
-    const view =
-        down || (blocked && access === 'unreachable')
-            ? 'unreachable'
-            : blocked
-              ? 'login'
-              : reported
-                ? 'chat'
-                : 'loading';
+    const blocked = !reported && access !== 'unknown' && access !== 'in';
+    const view = down
+        ? 'unreachable'
+        : blocked
+          ? access
+          : reported
+            ? 'chat'
+            : 'loading';
 
     useEffect(() => {
         if (reported || blocked) {
@@ -193,7 +189,7 @@ function OdooChat({
                         onLoad={() => setLoads((value) => value + 1)}
                     />
                 )}
-                {view === 'login' && (
+                {view === 'out' && (
                     <div className="mk-overlay">
                         <div className="mk-cta">
                             <SparkIcon />
@@ -224,6 +220,16 @@ function OdooChat({
                         <p className="mk-cta__title">Odoo is not reachable</p>
                         <p>
                             The chat opens as soon as {new URL(odooUrl).host} answers.
+                        </p>
+                    </div>
+                )}
+                {view === 'missing' && (
+                    <div className="mk-overlay mk-loading" role="status">
+                        <SparkIcon />
+                        <p className="mk-cta__title">The app is missing in Odoo</p>
+                        <p>
+                            Install MuK AI Browser from Apps in {new URL(odooUrl).host}.
+                            The chat opens here once it is installed.
                         </p>
                     </div>
                 )}

@@ -10,7 +10,7 @@ import {
 } from '../lib/messaging';
 import { getCheckpoint, patchCheckpoint } from '../lib/storage';
 import { unpairedPatch } from '../lib/checkpoint';
-import { OdooError, isUnreachable, loggedIn, pair, unpair } from '../lib/odoo';
+import { OdooError, checkOdoo, isUnreachable, pair, unpair } from '../lib/odoo';
 import { attach, joinAgentGroup, pollOnce } from '../lib/agent';
 import { normalizeOdooUrl, webUrl } from '../lib/origin';
 import { showInGroup, tabExists } from '../lib/runner';
@@ -28,10 +28,10 @@ const ENGAGED_STATES = new Set([...BUSY_STATES, 'waiting']);
 
 /** Ids of the runtime-registered content scripts. */
 const PAIRING_SCRIPT = 'muk-ai-pairing';
+const LAUNCHER_SCRIPT = 'muk-ai-launcher';
 
 /** How long the paired connect page shows its check mark before it closes. */
 const CONNECT_CLOSE_MS = 1500;
-const LAUNCHER_SCRIPT = 'muk-ai-launcher';
 
 /**
  * Service worker: attaches this device to the chat the side panel's embedded
@@ -136,9 +136,9 @@ export default defineBackground({
         ): Promise<unknown> | null {
             const tab = sender.tab;
             switch (message.type) {
-                case 'panel/logged-in':
+                case 'panel/check':
                     return getCheckpoint().then((cp) =>
-                        cp.odooUrl ? loggedIn(cp.odooUrl) : null,
+                        cp.odooUrl ? checkOdoo(cp.odooUrl) : 'unreachable',
                     );
                 case 'launcher/open-panel':
                     if (tab?.id != null) {
@@ -258,6 +258,7 @@ export default defineBackground({
 
         /**
          * Open the Odoo connect page, or the options page while no Odoo is set.
+         * An Odoo without the app gets an error instead of a page it lacks.
          *
          * @param returnTabId - The tab to return to once the page paired.
          */
@@ -265,6 +266,9 @@ export default defineBackground({
             const cp = await getCheckpoint();
             if (!cp.odooUrl) {
                 await browser.runtime.openOptionsPage();
+                return;
+            }
+            if (await appMissing(cp.odooUrl)) {
                 return;
             }
             const tab = await browser.tabs.create({
@@ -383,8 +387,21 @@ export default defineBackground({
                 await patchCheckpoint({ odooUrl: origin });
             }
             await syncContentScripts();
-            await sendStatus();
+            await appMissing(origin);
             return status();
+        }
+
+        /**
+         * Check that an Odoo has the app, recording the error when it lacks it.
+         *
+         * @param odooUrl - The Odoo origin.
+         * @returns Whether the app is missing.
+         */
+        async function appMissing(odooUrl: string): Promise<boolean> {
+            const missing = (await checkOdoo(odooUrl)) === 'missing';
+            lastError = missing ? new OdooError(404, 'app_missing').message : null;
+            await sendStatus();
+            return missing;
         }
 
         /** Revoke the device key (best effort) and forget the pairing. */
@@ -593,22 +610,26 @@ export default defineBackground({
         }
 
         /**
-         * Handle a failed request: 401 forgets the pairing, 404 attaches the
-         * chat again; anything else marks the link offline.
+         * Handle a failed request: 401 forgets the pairing, a lost browser
+         * session attaches the chat again; anything else marks the link
+         * offline.
          *
          * @param error - The error.
-         * @returns Whether the error was a handled 401 or 404.
+         * @returns Whether the error was handled.
          */
         async function handleError(error: unknown): Promise<boolean> {
             if (await forgetIfRevoked(error)) {
                 return true;
             }
-            if (error instanceof OdooError && error.status === 404) {
+            if (
+                error instanceof OdooError &&
+                error.code === 'browser_session_not_found'
+            ) {
                 const { aiSessionId } = await patchCheckpoint({
                     browserSessionId: null,
                 });
                 if (aiSessionId != null) {
-                    await attach(aiSessionId, currentDeviceLabel()).catch(fail);
+                    await attachChat(aiSessionId);
                 }
                 return true;
             }

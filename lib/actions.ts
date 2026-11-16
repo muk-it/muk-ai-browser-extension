@@ -41,12 +41,13 @@ export const MUTATING_TOOLS = new Set([
     'browser_press_key',
     'browser_hover',
     'browser_scroll',
-    'browser_navigate',
-    'browser_navigate_back',
 ]);
 
 /** `autocomplete` tokens of fields the extension never fills. */
 const SENSITIVE_AUTOCOMPLETE = /^(cc-.+|current-password|new-password|one-time-code)$/;
+
+/** Names and ids of password fields, also while "show password" made them text. */
+const PASSWORD_NAME = /passw|pwd/i;
 
 /** Arguments as the agent sends them. */
 type Args = Record<string, unknown>;
@@ -136,13 +137,15 @@ async function run(name: string, args: Args, ctx: ActionContext): Promise<ToolRe
 
 /**
  * Refuse fields the user must fill in: passwords, payment cards, one-time
- * codes and file uploads.
+ * codes and file uploads. Fields are told by tag name, which also holds for
+ * elements of a same-origin frame.
  *
  * @param el - The target element.
  * @returns A refusal, or `null` when the field may be filled.
  */
 function refuseField(el: Element): ToolResult | null {
-    if (el instanceof HTMLInputElement && el.type === 'file') {
+    const input = el.localName === 'input' ? (el as HTMLInputElement) : null;
+    if (input?.type === 'file') {
         return failure(
             'file_upload',
             'The browser agent never uploads files: ask the user to choose the file.',
@@ -150,7 +153,8 @@ function refuseField(el: Element): ToolResult | null {
     }
     const tokens = (el.getAttribute('autocomplete') ?? '').toLowerCase().split(/\s+/);
     if (
-        (el instanceof HTMLInputElement && el.type === 'password') ||
+        input?.type === 'password' ||
+        (input && PASSWORD_NAME.test(`${input.name} ${input.id}`)) ||
         tokens.some((token) => SENSITIVE_AUTOCOMPLETE.test(token))
     ) {
         return failure(
@@ -177,7 +181,7 @@ function readPage(args: Args): ToolResult {
         viewportOnly: args.viewport_only === true,
         interactiveOnly: args.interactive_only === true,
         ...(args.max_chars != null && { maxChars: Number(args.max_chars) }),
-    }).text;
+    });
     return { ok: true, url: location.href, title: document.title, snapshot: text };
 }
 
@@ -198,7 +202,7 @@ export function find(query: string, maxResults: number): ToolResult {
         interactiveOnly: false,
         maxChars: 0,
     })
-        .text.split('\n')
+        .split('\n')
         .map((line) => line.trim())
         .filter((line) => words.every((word) => line.toLowerCase().includes(word)));
     return { ok: true, matches: lines.slice(0, maxResults), total: lines.length };
@@ -325,6 +329,10 @@ function fillOne(el: Element, value: unknown): ToolResult {
  * @returns The selection result.
  */
 function select(el: Element, values: string[]): ToolResult {
+    const refusal = refuseField(el);
+    if (refusal) {
+        return refusal;
+    }
     if (!(el instanceof HTMLSelectElement)) {
         return failure('not_a_select', 'The element is not a select box.');
     }
@@ -352,6 +360,9 @@ function select(el: Element, values: string[]): ToolResult {
  * @returns The key result.
  */
 function pressKey(key: string, ref: unknown): ToolResult {
+    if (!key) {
+        return failure('bad_arguments', 'browser_press_key needs a key.');
+    }
     const target = ref
         ? resolveRef(String(ref))
         : (document.activeElement ?? document.body);
@@ -420,7 +431,7 @@ function scroll(args: Args): ToolResult {
  * @returns Whether the condition held, with a fresh snapshot.
  */
 async function waitFor(args: Args): Promise<ToolResult> {
-    const timeout = Number(args.timeout_ms ?? 10000);
+    const timeout = Math.min(Number(args.timeout_ms) || 10000, 60000);
     if (args.time_ms != null) {
         await sleep(Math.min(Number(args.time_ms), timeout));
         return { ok: true, snapshot: snapshotText() };
@@ -453,23 +464,29 @@ async function waitFor(args: Args): Promise<ToolResult> {
 }
 
 /**
- * Bring an element into view, optionally focus and select its text, and
- * return its centre for trusted input.
+ * Prepare trusted input: bring the element into view and return its centre.
+ * For keyboard input it focuses the element, selects its text when asked,
+ * and refuses when the focused field is one the user must fill in.
  *
- * @param args - `ref`, `focus`, `select`, `editable` (refuse sensitive fields).
- * @returns The centre in viewport CSS pixels.
+ * @param args - `ref` (optional for keyboard input), `keyboard`, `select`.
+ * @returns The centre in viewport CSS pixels, when a ref was given.
  */
 function locate(args: Args): ToolResult {
-    const el = resolveRef(String(args.ref));
-    if (args.editable) {
-        const refusal = refuseField(el);
+    const el = args.ref ? resolveRef(String(args.ref)) : null;
+    if (el) {
+        reveal(el);
+        if (args.keyboard) {
+            (el as HTMLElement).focus?.();
+        }
+    }
+    if (args.keyboard) {
+        const refusal = refuseField(el ?? focused());
         if (refusal) {
             return refusal;
         }
     }
-    reveal(el);
-    if (args.focus && el instanceof HTMLElement) {
-        el.focus();
+    if (!el) {
+        return { ok: true };
     }
     if (args.select) {
         if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
@@ -480,6 +497,27 @@ function locate(args: Args): ToolResult {
     }
     const rect = el.getBoundingClientRect();
     return { ok: true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+/**
+ * Return the element that receives keyboard input, inside open shadow roots
+ * and same-origin frames.
+ *
+ * @returns The deepest focused element.
+ */
+function focused(): Element {
+    let el: Element = document.activeElement ?? document.documentElement;
+    for (;;) {
+        const inner =
+            el.shadowRoot?.activeElement ??
+            (el.localName === 'iframe'
+                ? (el as HTMLIFrameElement).contentDocument?.activeElement
+                : null);
+        if (!inner || inner === el) {
+            return el;
+        }
+        el = inner;
+    }
 }
 
 /**
@@ -512,7 +550,7 @@ function layout(args: Args): ToolResult {
  */
 function snapshotText(): string {
     try {
-        return buildSnapshot().text;
+        return buildSnapshot();
     } catch {
         return '';
     }

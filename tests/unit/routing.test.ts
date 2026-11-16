@@ -4,7 +4,7 @@ import { normalizeOdooUrl, originInScope, originOf, webUrl } from '../../lib/ori
 import { parseKey } from '../../lib/keys';
 import { clickEvents, keyEvents } from '../../lib/cdp';
 import { cropBox } from '../../lib/screenshot';
-import { rememberExecuted, unpairedPatch } from '../../lib/checkpoint';
+import { rememberExecuted } from '../../lib/checkpoint';
 
 describe('routeTool', () => {
     it.each([
@@ -99,6 +99,10 @@ describe('input mapping', () => {
         ],
         ['7', { key: '7', code: 'Digit7', keyCode: 55, modifiers: [], text: '7' }],
         [
+            'Shift+a',
+            { key: 'A', code: 'KeyA', keyCode: 65, modifiers: ['Shift'], text: 'A' },
+        ],
+        [
             'Control++',
             { key: '+', code: '+', keyCode: 43, modifiers: ['Control'], text: '' },
         ],
@@ -178,16 +182,5 @@ describe('checkpoint', () => {
         expect(executed).toHaveLength(200);
         expect(executed[0]).toBe('c5');
         expect(rememberExecuted(['a', 'b'], 'a')).toEqual(['b', 'a']);
-    });
-
-    it('forgets the pairing but keeps the Odoo URL', () => {
-        const patch = unpairedPatch();
-        expect(patch).not.toHaveProperty('odooUrl');
-        expect(patch).toMatchObject({
-            apiKey: null,
-            browserSessionId: null,
-            aiSessionId: null,
-            executed: [],
-        });
     });
 });

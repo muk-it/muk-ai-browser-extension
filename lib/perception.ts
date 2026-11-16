@@ -4,13 +4,13 @@
  * (`- role "name" [state] [ref=eNN]`), viewport-only and visible by default.
  *
  * The ARIA role/name/state computation is vendored under lib/playwright-aria/
- * (ported from Microsoft Playwright, Apache-2.0 — see that directory and the
+ * (ported from Microsoft Playwright, Apache-2.0: see that directory and the
  * NOTICE file). This module owns the DOM walk, visibility/viewport filtering,
  * the stable-ref scheme, serialization, and the diff marking.
  *
- * Refs are stable across snapshots: a persistent WeakMap keeps the SAME element
- * on the SAME ref for its lifetime (an improvement over Playwright's
- * per-snapshot reset), and the counter only advances for newly-seen elements.
+ * Refs are stable across snapshots: a persistent WeakMap keeps the same element
+ * on the same ref for its lifetime, and the counter only advances for
+ * newly-seen elements.
  * Refs never touch the DOM.
  */
 
@@ -55,14 +55,6 @@ export interface SnapshotOptions {
     maxChars: number;
 }
 
-/** Result of {@link buildSnapshot}: serialized text plus the assigned ref count. */
-interface SnapshotResult {
-    /** The serialized YAML-ish snapshot text. */
-    text: string;
-    /** Number of distinct element refs present in this snapshot. */
-    refCount: number;
-}
-
 /** A Set-of-Mark overlay target: a ref and its current viewport rectangle. */
 interface ScreenshotTarget {
     /** The element ref. */
@@ -85,6 +77,8 @@ const TRUNCATION_MARKER =
 /** Thrown when a ref no longer resolves to a connected element. */
 export class StaleRefError extends Error {
     /**
+     * Name the stale ref.
+     *
      * @param ref - The ref that failed to resolve.
      */
     constructor(public readonly ref: Ref) {
@@ -101,7 +95,7 @@ export class StaleRefError extends Error {
 const refToElement = new Map<Ref, WeakRef<Element>>();
 
 /** element -> ref, persistent so a re-seen element keeps its ref. */
-const elementToRef = new WeakMap<Element, Ref>();
+let elementToRef = new WeakMap<Element, Ref>();
 
 /** Monotonic counter; only advances for newly-seen elements. */
 let refCounter = 0;
@@ -359,16 +353,16 @@ function truncate(text: string, maxChars: number): string {
  * stable refs and marking nodes new since the previous snapshot.
  *
  * @param opts - Partial snapshot options; missing fields use the defaults.
- * @returns The serialized text and the number of element refs assigned.
+ * @returns The serialized snapshot text.
  */
-export function buildSnapshot(opts: Partial<SnapshotOptions> = {}): SnapshotResult {
+export function buildSnapshot(opts: Partial<SnapshotOptions> = {}): string {
     const options: SnapshotOptions = { ...DEFAULT_SNAPSHOT_OPTIONS, ...opts };
-    const { roots, seen } = buildForest(options);
+    const { roots } = buildForest(options);
     const lines: string[] = [];
     for (const root of roots) {
         serializeNode(root, 0, lines);
     }
-    return { text: truncate(lines.join('\n'), options.maxChars), refCount: seen.size };
+    return truncate(lines.join('\n'), options.maxChars);
 }
 
 /**
@@ -408,11 +402,10 @@ export function markScreenshotTargets(): ScreenshotTarget[] {
     return targets;
 }
 
-/**
- * Reset the ref registry and diff baseline. Test-only; not used in production.
- */
+/** Forget every ref and the diff baseline, as a fresh page does. */
 export function __resetPerceptionState(): void {
     refToElement.clear();
+    elementToRef = new WeakMap<Element, Ref>();
     refCounter = 0;
     previousRefs = new Set<Ref>();
     hasPreviousSnapshot = false;
