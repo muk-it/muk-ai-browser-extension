@@ -7,7 +7,7 @@ import { PanelClient } from './client';
 /** How often the login is checked again while the panel asks to log in. */
 const LOGIN_RECHECK_MS = 3_000;
 
-/** First and longest wait before checking an unreachable Odoo, or one without the app, again. */
+/** First and longest wait before checking an unreachable or app-less Odoo again. */
 const UNREACHABLE_RECHECK_MS = [2_000, 30_000];
 
 /** How long a loaded frame may stay silent before the Odoo is checked again. */
@@ -70,8 +70,9 @@ export function App() {
  * The paired Odoo's chat in a frame. The service worker checks the Odoo
  * first, and again when a loaded frame stays silent: logged out shows a login
  * card, unreachable or without the app a notice; all keep checking and open
- * the chat as soon as Odoo answers with a user. Otherwise the frame loads behind a loading state
- * until it reports the chat it opens, which this device then attaches to: a
+ * the chat as soon as Odoo answers with a user. Otherwise the frame loads
+ * behind a loading state until it reports the chat it opens, which this
+ * device then attaches to: a
  * new chat when the panel opens, the attached one when the frame reloads.
  * While the chat shows, the worker's polling watches Odoo: unreachable covers
  * the frame, and the frame reloads once Odoo answers again. Once the frame
@@ -315,7 +316,7 @@ function CardBar({
             </span>
             <span className="mk-card__text">
                 <b>{partner ? partner.name : 'Not in Odoo yet'}</b>
-                <small>{partner ? partner.details.join(' · ') : card.host}</small>
+                <small>{partner ? partner.details.join(' \u00b7 ') : card.host}</small>
             </span>
             {partner && (
                 <button
@@ -365,7 +366,7 @@ function AgentBar({ status, onFocus }: { status: Status; onFocus: () => void }) 
                 ) : tab ? (
                     <>
                         Acting in <b>{hostOf(tab.url)}</b>
-                        {status.groupTabs > 1 && ` · ${status.groupTabs} tabs`}
+                        {status.groupTabs > 1 && ` \u00b7 ${status.groupTabs} tabs`}
                     </>
                 ) : (
                     'Open a web page for the agent to act in'

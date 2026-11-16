@@ -214,7 +214,7 @@ function Step({
             aria-current={current ? 'step' : undefined}
         >
             <span className={`mk-step__badge${done ? ' mk-step__badge--done' : ''}`}>
-                {done ? '✓' : number}
+                {done ? '\u2713' : number}
             </span>
             <div className="mk-step__body">
                 <h2>{title}</h2>

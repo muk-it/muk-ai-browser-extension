@@ -153,8 +153,8 @@ async function run(name: string, args: Args, ctx: ActionContext): Promise<ToolRe
 
 /**
  * Refuse fields the user must fill in (passwords, payment cards, one-time
- * codes) and file fields, which only `browser_upload_file` fills. Fields are told by tag name, which also holds for
- * elements of a same-origin frame.
+ * codes) and file fields, which only `browser_upload_file` fills. Fields are
+ * told by tag name, which also holds for elements of a same-origin frame.
  *
  * @param el - The target element.
  * @returns A refusal, or `null` when the field may be filled.

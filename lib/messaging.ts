@@ -63,13 +63,13 @@ export type SwToPanelMessage =
 
 /** One-off runtime messages. */
 export type RuntimeMessage =
-    /** The side panel asks whether Odoo has the app and a logged-in user (`OdooAccess`). */
+    /** The side panel asks whether Odoo has the app and a user (`OdooAccess`). */
     | { type: 'panel/check' }
     /** The launcher was clicked: open the side panel for its tab. */
     | { type: 'launcher/open-panel' }
     /** The launcher loaded and asks whether the side panel is open (`boolean`). */
     | { type: 'launcher/hello' }
-    /** The service worker tells the launchers of a window the panel opened or closed. */
+    /** The service worker tells a window's launchers the panel opened or closed. */
     | { type: 'launcher/panel'; open: boolean }
     /** The pairing reader read a code on the Odoo connect page. */
     | { type: 'pairing/code'; code: string }

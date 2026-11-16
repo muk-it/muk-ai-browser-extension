@@ -2,9 +2,9 @@
 
 <img src="public/icon/128.png" alt="" width="64" align="right">
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-MuK_AI_Browser-33627E?style=flat-square&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
-[![Odoo App](https://img.shields.io/badge/Odoo-muk__ai__browser-714B67?style=flat-square)](https://apps.odoo.com/apps/modules/muk_ai_browser)
-[![YouTube demo](https://img.shields.io/badge/YouTube-demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/ZcIvjovoFtg)
+[![Chrome Download](https://img.shields.io/badge/Chrome-Download-33627E?style=flat-square&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/fecogbhcchendbojonbojofkiehdacne)
+[![Odoo Download](https://img.shields.io/badge/Odoo-Download-714B67?style=flat-square)](https://apps.odoo.com/apps/modules/muk_ai_browser)
+[![YouTube Watch](https://img.shields.io/badge/YouTube-Watch-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/ZcIvjovoFtg)
 [![License Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Website mukit.at](https://img.shields.io/badge/Website-mukit.at-243742?style=flat-square)](https://www.mukit.at)
 
@@ -173,32 +173,14 @@ is in [store/PRIVACY.md](store/PRIVACY.md).
 ## Develop
 
 ```bash
-npm ci                 # install
-npm run dev            # watch build with reload
-npm run build          # .output/chrome-mv3
-npm run zip            # release zip with the fixed id
-npm run zip:store      # Chrome Web Store zip, without the id key
-npm test               # unit tests (vitest, jsdom)
-npm run lint           # eslint
-npm run format:check   # prettier
-npx tsc --noEmit       # types
-npm run e2e            # Playwright against the build and a fake Odoo
+npm ci && npm run build   # .output/chrome-mv3
+npm test                  # unit tests
 ```
 
-`e2e/live.spec.ts` runs against a real Odoo when `ODOO_URL` and `PAIR_CODE`
-are set; `HEADED=1` shows the browser.
-
-- `lib/`: logic with unit tests: Odoo client, attach and poll, tool routing
-  and runner, perception, page actions, screenshots, trusted input, messages.
-- `entrypoints/`: wiring. `background.ts` (service worker: pairing, Odoo
-  checks, polling, card, context menu), `sidepanel/` (onboarding, the card
-  and the embedded chat), `options/`, `content/` (page tools, injected on
-  demand), `launcher.content.ts` and `pairing.content.ts` (registered at
-  runtime).
-- `store/`: the privacy policy and the Chrome Web Store images.
-
-The Odoo side of the protocol (pairing, polling, tool results, the card) lives
-in the `muk_ai_browser` app, in `controllers/browser.py`.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the checks, the end-to-end
+tests, the layout, the code style and the release steps;
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the extension and
+the Odoo app work together.
 
 ## Contributing
 

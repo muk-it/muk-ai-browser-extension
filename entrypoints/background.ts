@@ -226,7 +226,7 @@ export default defineBackground({
             }
         }
 
-        /** Hand the composer text to the panel of its window, once that panel is open. */
+        /** Hand the composer text to the panel of its window once that panel opens. */
         function deliverCompose(): void {
             for (const [port, windowId] of panels) {
                 if (compose && windowId === compose.windowId) {

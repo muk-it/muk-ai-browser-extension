@@ -72,7 +72,7 @@ export interface PendingAction {
     call_id: string;
     name: string;
     arguments: Record<string, unknown>;
-    /** The site origin the server judged the call on; absent when its target is a URL. */
+    /** The origin the server judged the call on; absent for a call with a URL. */
     origin?: string;
 }
 

@@ -166,7 +166,7 @@ describe('side panel', () => {
         );
         expect(container.querySelector('.mk-agentbar__dot')).not.toBeNull();
         expect(container.querySelector('.mk-agentbar')?.textContent).toBe(
-            'Acting in shop.example · 3 tabs',
+            'Acting in shop.example \u00b7 3 tabs',
         );
     });
 
@@ -228,7 +228,7 @@ describe('side panel', () => {
             actions: [{ label: 'Opportunity', prompt: 'Create an opportunity' }],
         });
         expect(container.querySelector('.mk-card')?.textContent).toBe(
-            'AAcme1 open opportunity · ViennaOpen+ Opportunity',
+            'AAcme1 open opportunity \u00b7 ViennaOpen+ Opportunity',
         );
         act(() => buttons()[0].click());
         act(() => buttons()[1].click());

@@ -12,9 +12,9 @@ const PUBLIC_KEY =
 
 /**
  * WXT configuration (Chrome MV3). The extension is the actuator of the
- * muk_ai_browser Odoo app and embeds its chat; the Odoo address is configured at runtime, so
- * no host is granted at install: the user grants their Odoo on the options
- * page, and optionally all sites. Trusted input needs `debugger` in
+ * muk_ai_browser Odoo app and embeds its chat; the Odoo address is configured
+ * at runtime, so no host is granted at install: the user grants their Odoo on
+ * the options page, and optionally all sites. Trusted input needs `debugger` in
  * `permissions`: Chrome does not allow it as an optional permission.
  */
 export default defineConfig({
